@@ -68,13 +68,11 @@ from nodes.orchestrator_node import (
     orchestrator_finalize_node,
 )
 from nodes.hitl_node import make_hitl_node
-from nodes.agent_nodes import (
-    run_prd_node,
-    run_ux_arch_parallel_node,
-    run_dev_node,
-    run_qa_node,
-    run_infra_sec_parallel_node,
-)
+from nodes.prd.prd_node import run_prd_node
+from nodes.dev.dev_node import run_dev_node
+from nodes.qa.qa_node import run_qa_node
+from nodes.parallel.ux_arch_parallel_node import run_ux_arch_parallel_node
+from nodes.parallel.infra_sec_parallel_node import run_infra_sec_parallel_node
 from config.settings import CHECKPOINTER, SQLITE_PATH
 
 
