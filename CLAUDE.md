@@ -9,6 +9,23 @@ con checkpoints Human-in-the-Loop via Slack. Jira para tracking. FastAPI para we
 - `langchain-anthropic` (Claude Opus/Sonnet) · `langchain-google-genai` (Gemini)
 - `slack-sdk` · `jira` (python-jira) · `uvicorn`
 
+## Claude Code Skills
+
+Instalar antes de trabajar en este proyecto:
+
+```bash
+# LangGraph — expertise en grafos, nodos, checkpointers, patrones HITL
+claude mcp add langgraph
+
+# LangSmith tracing — agregar/consultar trazas
+claude mcp add langsmith-trace
+
+# Caveman — comunicación comprimida, menos tokens
+claude mcp add caveman
+```
+
+Verificar instaladas: `/find-skills` en Claude Code.
+
 ## Arquitectura
 ```
 state/cycle_state.py     → CycleState (TypedDict compartido entre todos los nodos)
