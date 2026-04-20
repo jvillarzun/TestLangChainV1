@@ -1,14 +1,20 @@
-from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt
-from tools.jira_tools import create_task
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
-# ── DEV Agent ─────────────────────────────────────────────────────────────────
+from state.cycle_state import CycleState
+from nodes.helper import _get_last_feedback, load_prompt, save_output
+from tools.jira_tools import create_task
+from config.settings import MODEL_DEV
+
 
 def run_dev_node(state: CycleState) -> dict:
-    """Nodo DEV — invoca a Claude Code. Clona repo, implementa, abre PR."""
-    print("\n💻 DEV-AGENT: Implementando código...")
+    """Nodo DEV — Gemini genera DEVSPECS.md desde PRD + ARQ + UX aprobados."""
+    print("\n💻 DEV-AGENT: Generando DEVSPECS.md...")
 
     feedback = _get_last_feedback(state, "dev")
+    if feedback:
+        print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
     system_prompt = load_prompt(
         "dev",
         challenge_name=state["challenge_name"],
@@ -20,23 +26,18 @@ def run_dev_node(state: CycleState) -> dict:
         feedback=feedback or "Sin feedback previo.",
     )
 
-    # STUB — en producción Claude Code clona el repo y trabaja sobre él
-    dev_content = f"""# DEVSPECS — {state['challenge_name']}
-status: READY_FOR_REVIEW
+    llm = ChatGoogleGenerativeAI(model=MODEL_DEV)
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content="Genera el DEVSPECS.md completo según las instrucciones."),
+    ])
+    dev_content = response.content
 
-## Setup
-npm install && npm run build
+    output_path = save_output("DEVSPECS.md", dev_content)
+    print(f"   💾 Guardado en {output_path}")
 
-## Estructura
-src/score-engine/handler.ts — Lambda principal
-src/rules-engine.ts         — Reglas síncronas
-src/ml-scorer.ts            — Integración Bedrock
-
-## Tests
-npm test → 12/12 PASS, coverage 87%
-{'(Re-trabajado con feedback: ' + feedback + ')' if feedback else ''}
-"""
-    pr_url = f"https://github.com/machbank/fraudshield/pull/42"  # STUB
+    # PR URL stub — el dev agent real (P3) lo reemplazará con un PR real
+    pr_url = None
 
     task_key = create_task(
         phase="dev",
@@ -45,9 +46,10 @@ npm test → 12/12 PASS, coverage 87%
         parent_key=state.get("jira_epic_key"),
         pr_url=pr_url,
     )
-    print(f"   ✅ Código implementado")
-    print(f"   🐙 PR abierto: {pr_url}")
+
+    print(f"   ✅ DEVSPECS.md generado ({len(dev_content)} chars)")
     print(f"   🎫 Jira Task: {task_key or 'N/A'}")
+
     return {
         "dev_content":     dev_content,
         "dev_pr_url":      pr_url,

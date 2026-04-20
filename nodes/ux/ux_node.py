@@ -1,31 +1,20 @@
-"""
-nodes/agent_nodes.py
-─────────────────────
-Nodos placeholder para los 7 agentes especializados.
-
-En esta primera versión (Paso 1 del ADLC) estos nodos son stubs
-que simulan el trabajo del agente. En las siguientes iteraciones
-cada nodo invocará al LLM correspondiente con las skills inyectadas.
-
-Cada nodo:
-  1. Lee el contexto necesario del estado (outputs de fases previas)
-  2. Obtiene el feedback del último HITL si la fase fue rechazada
-  3. Invoca al agente (stub por ahora)
-  4. Guarda el resultado en el estado
-  5. Crea el ticket en Jira
-"""
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from state.cycle_state import CycleState
+from nodes.helper import _get_last_feedback, load_prompt, save_output
 from tools.jira_tools import create_story
-from nodes.helper import _get_last_feedback, load_prompt
+from config.settings import MODEL_UX
 
-# ── UX + ARQ Agents (paralelo) ─────────────────────────────────────────────────
 
 def run_ux_node(state: CycleState) -> dict:
-    """Nodo UX — invoca al ux-agent (Gemini Pro). Genera UXSPECS.md."""
+    """Nodo UX — Gemini genera UXSPECS.md desde PRD aprobado."""
     print("\n🎨 UX-AGENT: Generando UXSPECS.md...")
 
     feedback = _get_last_feedback(state, "ux")
+    if feedback:
+        print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
     system_prompt = load_prompt(
         "ux",
         challenge_name=state["challenge_name"],
@@ -35,25 +24,25 @@ def run_ux_node(state: CycleState) -> dict:
         feedback=feedback or "Sin feedback previo.",
     )
 
-    # STUB
-    ux_content = f"""# UXSPECS — {state['challenge_name']}
-status: READY_FOR_REVIEW
+    llm = ChatGoogleGenerativeAI(model=MODEL_UX)
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content="Genera el UXSPECS.md completo según las instrucciones."),
+    ])
+    ux_content = response.content
 
-## Flujos principales
-1. Flujo de pago → scoring → resultado (aprobado/rechazado)
-2. Pantalla de rechazo con explicación en lenguaje natural
-3. Dashboard del analista de riesgo
+    output_path = save_output("UXSPECS.md", ux_content)
+    print(f"   💾 Guardado en {output_path}")
 
-## Wireframes
-[Wireframes en ASCII omitidos en este stub]
-"""
     story_key = create_story(
         phase="ux",
         summary=f"{state['challenge_name']} — UX Specs",
         description=ux_content[:2000],
         epic_key=state.get("jira_epic_key"),
     )
-    print(f"   ✅ UXSPECS.md generado")
+
+    print(f"   ✅ UXSPECS.md generado ({len(ux_content)} chars)")
+
     return {
         "ux_content":      ux_content,
         "jira_story_keys": [story_key] if story_key else [],

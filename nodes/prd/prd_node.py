@@ -1,30 +1,14 @@
-"""
-nodes/agent_nodes.py
-─────────────────────
-Nodos placeholder para los 7 agentes especializados.
-
-En esta primera versión (Paso 1 del ADLC) estos nodos son stubs
-que simulan el trabajo del agente. En las siguientes iteraciones
-cada nodo invocará al LLM correspondiente con las skills inyectadas.
-
-Cada nodo:
-  1. Lee el contexto necesario del estado (outputs de fases previas)
-  2. Obtiene el feedback del último HITL si la fase fue rechazada
-  3. Invoca al agente (stub por ahora)
-  4. Guarda el resultado en el estado
-  5. Crea el ticket en Jira
-"""
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt
+from nodes.helper import _get_last_feedback, load_prompt, save_output
 from tools.jira_tools import create_story
+from config.settings import MODEL_PRD
 
 
 def run_prd_node(state: CycleState) -> dict:
-    """
-    Nodo PRD — invoca al prd-agent (Claude Sonnet).
-    Lee el challenge y genera PRDSPECS.md.
-    """
+    """Nodo PRD — Gemini genera PRDSPECS.md desde el challenge."""
     print("\n📋 PRD-AGENT: Generando PRDSPECS.md...")
 
     feedback = _get_last_feedback(state, "prd")
@@ -41,35 +25,20 @@ def run_prd_node(state: CycleState) -> dict:
         feedback=feedback or "Sin feedback previo.",
     )
 
-    # ── TODO: Invocar Claude Sonnet con el skill prd-template ──────────────
-    # from langchain_anthropic import ChatAnthropic
-    # llm = ChatAnthropic(model=MODEL_PRD)
-    # content = llm.invoke([...])
-    # ────────────────────────────────────────────────────────────────────────
+    llm = ChatGoogleGenerativeAI(model=MODEL_PRD)
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content="Genera el PRDSPECS.md completo según las instrucciones."),
+    ])
+    prd_content = response.content
 
-    # STUB: contenido simulado
-    prd_content = f"""# PRDSPECS — {state['challenge_name']}
-status: READY_FOR_REVIEW
+    output_path = save_output("PRDSPECS.md", prd_content)
+    print(f"   💾 Guardado en {output_path}")
 
-## Problema
-{state['challenge_description']}
-
-## Criterios de éxito
-{chr(10).join(f'- {c}' for c in state['challenge_success_criteria'])}
-
-## User Stories
-- US-01: Como cliente, quiero saber en <2s si mi pago fue aprobado
-- US-02: Como cliente, quiero ver por qué fue rechazado
-- US-03: Como analista, quiero ver el score de riesgo de cada tx
-
-{'(Re-trabajado con feedback: ' + feedback + ')' if feedback else ''}
-"""
-
-    # Crear Story en Jira
     story_key = create_story(
         phase="prd",
         summary=f"{state['challenge_name']} — Product Requirements",
-        description=prd_content[:2000],  # Jira tiene límite de caracteres
+        description=prd_content[:2000],
         epic_key=state.get("jira_epic_key"),
     )
 
@@ -77,6 +46,6 @@ status: READY_FOR_REVIEW
     print(f"   🎫 Jira Story: {story_key or 'N/A'}")
 
     return {
-        "prd_content":    prd_content,
+        "prd_content":     prd_content,
         "jira_story_keys": [story_key] if story_key else [],
     }

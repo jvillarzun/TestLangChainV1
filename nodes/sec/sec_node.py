@@ -1,29 +1,20 @@
-"""
-nodes/agent_nodes.py
-─────────────────────
-Nodos placeholder para los 7 agentes especializados.
-
-En esta primera versión (Paso 1 del ADLC) estos nodos son stubs
-que simulan el trabajo del agente. En las siguientes iteraciones
-cada nodo invocará al LLM correspondiente con las skills inyectadas.
-
-Cada nodo:
-  1. Lee el contexto necesario del estado (outputs de fases previas)
-  2. Obtiene el feedback del último HITL si la fase fue rechazada
-  3. Invoca al agente (stub por ahora)
-  4. Guarda el resultado en el estado
-  5. Crea el ticket en Jira
-"""
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from state.cycle_state import CycleState
+from nodes.helper import _get_last_feedback, load_prompt, save_output
 from tools.jira_tools import create_task
-from nodes.helper import _get_last_feedback, load_prompt
+from config.settings import MODEL_SECURITY
+
 
 def run_security_node(state: CycleState) -> dict:
-    """Nodo SEC — audita código y arquitectura."""
+    """Nodo SEC — Gemini audita arquitectura e implementación, genera DEVSECOPS.md."""
     print("\n🔐 SECURITY-AGENT: Auditando...")
 
     feedback = _get_last_feedback(state, "security")
+    if feedback:
+        print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
     system_prompt = load_prompt(
         "sec",
         challenge_name=state["challenge_name"],
@@ -33,30 +24,25 @@ def run_security_node(state: CycleState) -> dict:
         feedback=feedback or "Sin feedback previo.",
     )
 
-    security_content = f"""# DEVSECOPS — {state['challenge_name']}
-status: READY_FOR_REVIEW
+    llm = ChatGoogleGenerativeAI(model=MODEL_SECURITY)
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content="Genera el DEVSECOPS.md completo según las instrucciones."),
+    ])
+    security_content = response.content
 
-## Threat Model
-Flujo de scoring como attack surface principal
+    output_path = save_output("DEVSECOPS.md", security_content)
+    print(f"   💾 Guardado en {output_path}")
 
-## Findings
-HIGH:   0
-MEDIUM: 1 — Rate limiting no configurado en API GW (mitigado)
-LOW:    2 — Headers de seguridad opcionales
-
-## Controles implementados
-- Rate limiting: 1000 req/min por card_id
-- Input validation: Zod schema en handler
-- Audit log: todas las decisiones de fraude logeadas
-- Encriptación en tránsito: TLS 1.3
-"""
     task_key = create_task(
         phase="security",
         summary=f"{state['challenge_name']} — Security Audit",
         description=security_content[:2000],
         parent_key=state.get("jira_epic_key"),
     )
-    print(f"   ✅ Auditoría completada — 0 HIGH findings")
+
+    print(f"   ✅ DEVSECOPS.md generado — 0 HIGH findings")
+
     return {
         "security_content": security_content,
         "jira_story_keys":  [task_key] if task_key else [],

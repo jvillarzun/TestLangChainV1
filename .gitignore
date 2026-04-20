@@ -56,6 +56,9 @@ Thumbs.db
 *.log
 logs/
 
+# Generated outputs (runtime artifacts)
+outputs/*.md
+
 # pytest / coverage
 .pytest_cache/
 .coverage

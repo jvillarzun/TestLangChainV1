@@ -92,11 +92,11 @@ Ver `.env.example`. Críticas para arrancar:
 ## Modelo por agente
 | Agente | Modelo | Razón |
 |---|---|---|
-| Orchestrator | `claude-opus-4-5-20251101` | Planificación compleja |
-| PRD, QA, Infra | `claude-sonnet-4-5-20251101` | Redacción estructurada |
-| UX | `gemini-1.5-pro` | Razonamiento visual/layout |
-| Architect, Security | `claude-opus-4-5-20251101` | Decisiones con trade-offs |
-| Dev | Claude Code (subprocess) | Escribe y ejecuta código real |
+| Todos | `gemini-2.0-flash` | Unificado para hackathon — rápido y económico |
+| Orchestrator | `gemini-2.0-flash-lite` | Routing simple, no necesita capacidad máxima |
+| Dev | Claude Code (subprocess) | Escribe y ejecuta código real (P3) |
+
+> Modelos definidos en `config/settings.py` — cambiar ahí sin tocar nodos.
 
 ## Flujo HITL
 1. Agente termina → guarda output en `state`

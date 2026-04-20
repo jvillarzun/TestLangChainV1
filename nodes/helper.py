@@ -1,6 +1,8 @@
 from pathlib import Path
 from state.cycle_state import CycleState
 
+_OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
+
 
 def _get_last_feedback(state: CycleState, phase: str) -> str | None:
     """Extrae feedback del último rechazo HITL para esta fase."""
@@ -31,3 +33,11 @@ def load_prompt(agent: str, **kwargs) -> str:
         def __missing__(self, key: str) -> str:
             return "{" + key + "}"
     return template.format_map(_Safe(kwargs))
+
+
+def save_output(filename: str, content: str) -> Path:
+    """Guarda contenido en outputs/<filename>. Crea la carpeta si no existe."""
+    _OUTPUTS_DIR.mkdir(exist_ok=True)
+    path = _OUTPUTS_DIR / filename
+    path.write_text(content, encoding="utf-8")
+    return path

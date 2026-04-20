@@ -1,31 +1,20 @@
-"""
-nodes/agent_nodes.py
-─────────────────────
-Nodos placeholder para los 7 agentes especializados.
-
-En esta primera versión (Paso 1 del ADLC) estos nodos son stubs
-que simulan el trabajo del agente. En las siguientes iteraciones
-cada nodo invocará al LLM correspondiente con las skills inyectadas.
-
-Cada nodo:
-  1. Lee el contexto necesario del estado (outputs de fases previas)
-  2. Obtiene el feedback del último HITL si la fase fue rechazada
-  3. Invoca al agente (stub por ahora)
-  4. Guarda el resultado en el estado
-  5. Crea el ticket en Jira
-"""
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from state.cycle_state import CycleState
+from nodes.helper import _get_last_feedback, load_prompt, save_output
 from tools.jira_tools import create_task
-from nodes.helper import _get_last_feedback, load_prompt
+from config.settings import MODEL_QA
 
-# ── QA Agent ──────────────────────────────────────────────────────────────────
 
 def run_qa_node(state: CycleState) -> dict:
-    """Nodo QA — gate de calidad. Valida criterios del PRD."""
+    """Nodo QA — Gemini evalúa criterios, genera QASCPECS.md y setea qa_passed."""
     print("\n🧪 QA-AGENT: Validando criterios de aceptación...")
 
     feedback = _get_last_feedback(state, "qa")
+    if feedback:
+        print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
     system_prompt = load_prompt(
         "qa",
         challenge_name=state["challenge_name"],
@@ -35,28 +24,36 @@ def run_qa_node(state: CycleState) -> dict:
         feedback=feedback or "Sin feedback previo.",
     )
 
-    # STUB — en producción lee el PR y ejecuta los tests
-    qa_content = f"""# QASCPECS — {state['challenge_name']}
-status: READY_FOR_REVIEW
+    llm = ChatGoogleGenerativeAI(model=MODEL_QA)
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content="Genera el QASCPECS.md completo. Termina con 'qa_passed: true' o 'qa_passed: false'."),
+    ])
+    qa_content = response.content
 
-## Resultados
-US-01 ✅ Latencia p95: 145ms (req: <200ms) — PASS
-US-02 ✅ Explicación presente en rechazos — PASS
-US-03 ✅ Dashboard refresh: 2.1s (req: <5s) — PASS
+    output_path = save_output("QASCPECS.md", qa_content)
+    print(f"   💾 Guardado en {output_path}")
 
-## Sign-off
-3/3 criterios críticos PASS
-Aprobado para deploy
-"""
+    # Determinar resultado leyendo el output del LLM
+    content_lower = qa_content.lower()
+    qa_passed = (
+        "qa_passed: true" in content_lower
+        or "qa_approved" in content_lower
+    )
+
     task_key = create_task(
         phase="qa",
         summary=f"{state['challenge_name']} — QA Sign-off",
         description=qa_content[:2000],
         parent_key=state.get("jira_epic_key"),
     )
-    print(f"   ✅ QA PASS — 3/3 criterios")
+
+    result_icon = "✅" if qa_passed else "❌"
+    print(f"   {result_icon} QA {'PASS' if qa_passed else 'FAIL'}")
+    print(f"   🎫 Jira Task: {task_key or 'N/A'}")
+
     return {
         "qa_content":      qa_content,
-        "qa_passed":       True,
+        "qa_passed":       qa_passed,
         "jira_story_keys": [task_key] if task_key else [],
     }
