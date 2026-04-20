@@ -98,7 +98,7 @@ def make_hitl_node(phase: str):
         feedback = human_response.get("feedback")
         reviewer = human_response.get("reviewer", "unknown")
 
-        print(f"   {'✅' if decision == 'approve' else '❌'} Decisión: {decision}")
+        print(f"   {'✅' if decision == 'approve' else '🔄'} Decisión: {'Aprobado' if decision == 'approve' else 'Rehacer fase'}")
         if feedback:
             print(f"   💬 Feedback: {feedback}")
 

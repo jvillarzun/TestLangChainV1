@@ -216,7 +216,7 @@ def notify_reviewer(
             },
             {
                 "type": "button",
-                "text": {"type": "plain_text", "text": "❌ Rechazar con feedback"},
+                "text": {"type": "plain_text", "text": "🔄 Rehacer esta fase"},
                 "style": "danger",
                 "value": reject_value,
                 "action_id": "hitl_reject",
@@ -255,9 +255,9 @@ def update_hitl_message(
     Se llama desde el webhook de Slack después de procesar la decisión.
     """
     config = PHASE_HITL_CONFIG.get(phase, {})
-    emoji = "✅" if decision == "approve" else "❌"
-    label = "Aprobado" if decision == "approve" else "Rechazado"
-    color = "#2eb886" if decision == "approve" else "#e01e5a"
+    emoji = "✅" if decision == "approve" else "🔄"
+    label = "Aprobado" if decision == "approve" else "Rehaciendo fase"
+    color = "#2eb886" if decision == "approve" else "#e8a838"
 
     reviewer_id = SLACK_USERS.get(config.get("reviewer_role", ""), "")
 

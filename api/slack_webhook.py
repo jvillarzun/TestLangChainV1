@@ -206,8 +206,8 @@ async def _open_feedback_modal(
         view={
             "type":             "modal",
             "callback_id":      "hitl_feedback_modal",
-            "title":            {"type": "plain_text", "text": "Feedback de rechazo"},
-            "submit":           {"type": "plain_text", "text": "Enviar y rechazar"},
+            "title":            {"type": "plain_text", "text": "Instrucciones para rehacer"},
+            "submit":           {"type": "plain_text", "text": "Rehacer con este feedback"},
             "close":            {"type": "plain_text", "text": "Cancelar"},
             "private_metadata": json.dumps({
                 "thread_id":  thread_id,
@@ -218,7 +218,7 @@ async def _open_feedback_modal(
             "blocks": [
                 {
                     "type":    "section",
-                    "text":    {"type": "mrkdwn", "text": f"Estás rechazando la fase *{phase}*."},
+                    "text":    {"type": "mrkdwn", "text": f"El agente rehará la fase *{phase}* con tus instrucciones."},
                 },
                 {
                     "type":    "input",
