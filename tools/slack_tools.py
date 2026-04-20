@@ -125,11 +125,11 @@ def notify_reviewer(
         print(f"[Slack] No hay user ID configurado para rol '{config['reviewer_role']}'")
         return None
 
-    # Construir el preview del entregable (primeras 300 chars)
+    # Construir el preview del entregable (primeras 500 chars)
     preview = ""
     if deliverable_content:
-        preview_text = deliverable_content[:300].strip()
-        if len(deliverable_content) > 300:
+        preview_text = deliverable_content[:500].strip()
+        if len(deliverable_content) > 500:
             preview_text += "..."
         preview = f"\n```{preview_text}```"
 
@@ -174,6 +174,15 @@ def notify_reviewer(
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*Preview del entregable:*{preview}"}
+        })
+
+    # Link al .md generado en disco
+    deliverable_filename = config.get("deliverable", "").split("+")[0].strip()
+    if deliverable_filename.endswith(".md"):
+        md_url = f"{WEBHOOK_BASE_URL}/deliverables/{deliverable_filename}"
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"📄 *Ver documento completo:* <{md_url}|{deliverable_filename}>"}
         })
 
     # Contexto extra (ej: URL del PR de GitHub)

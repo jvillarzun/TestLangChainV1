@@ -29,6 +29,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from langgraph.types import Command
 
 from graph.mach_graph import build_graph, get_graph_config
@@ -37,6 +38,12 @@ from config.settings import SLACK_SIGNING_SECRET
 
 
 app = FastAPI(title="MACH Race — Slack HITL Webhook")
+
+# Servir outputs/ en /deliverables — los .md generados son accesibles por URL
+from pathlib import Path as _Path
+_outputs_dir = _Path(__file__).parent.parent / "outputs"
+_outputs_dir.mkdir(exist_ok=True)
+app.mount("/deliverables", StaticFiles(directory=str(_outputs_dir)), name="deliverables")
 
 # Grafo compartido — singleton (el checkpointer guarda el estado por thread_id)
 _graph = build_graph()
