@@ -17,12 +17,23 @@ Cada nodo:
 
 from state.cycle_state import CycleState
 from tools.jira_tools import create_task
+from nodes.helper import _get_last_feedback, load_prompt
 
 # ── QA Agent ──────────────────────────────────────────────────────────────────
 
 def run_qa_node(state: CycleState) -> dict:
     """Nodo QA — gate de calidad. Valida criterios del PRD."""
     print("\n🧪 QA-AGENT: Validando criterios de aceptación...")
+
+    feedback = _get_last_feedback(state, "qa")
+    system_prompt = load_prompt(
+        "qa",
+        challenge_name=state["challenge_name"],
+        challenge_type=state["challenge_type"],
+        prd_content=state.get("prd_content") or "",
+        dev_content=state.get("dev_content") or "",
+        feedback=feedback or "Sin feedback previo.",
+    )
 
     # STUB — en producción lee el PR y ejecuta los tests
     qa_content = f"""# QASCPECS — {state['challenge_name']}

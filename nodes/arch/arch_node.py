@@ -17,12 +17,22 @@ Cada nodo:
 
 from state.cycle_state import CycleState
 from tools.jira_tools import create_story, create_task
-from nodes.helper import _get_last_feedback
+from nodes.helper import _get_last_feedback, load_prompt
 
 
 def run_arch_node(state: CycleState) -> dict:
     """Nodo ARQ — invoca al architect-agent (Claude Opus). Genera ARQSPECS.md."""
     print("\n🏗️  ARCHITECT-AGENT: Generando ARQSPECS.md...")
+
+    feedback = _get_last_feedback(state, "arch")
+    system_prompt = load_prompt(
+        "arch",
+        challenge_name=state["challenge_name"],
+        challenge_type=state["challenge_type"],
+        challenge_description=state["challenge_description"],
+        prd_content=state.get("prd_content") or "",
+        feedback=feedback or "Sin feedback previo.",
+    )
 
     # STUB
     arch_content = f"""# ARQSPECS — {state['challenge_name']}

@@ -17,10 +17,21 @@ Cada nodo:
 
 from state.cycle_state import CycleState
 from tools.jira_tools import create_task
+from nodes.helper import _get_last_feedback, load_prompt
 
 def run_security_node(state: CycleState) -> dict:
     """Nodo SEC — audita código y arquitectura."""
     print("\n🔐 SECURITY-AGENT: Auditando...")
+
+    feedback = _get_last_feedback(state, "security")
+    system_prompt = load_prompt(
+        "sec",
+        challenge_name=state["challenge_name"],
+        challenge_type=state["challenge_type"],
+        arch_content=state.get("arch_content") or "",
+        dev_content=state.get("dev_content") or "",
+        feedback=feedback or "Sin feedback previo.",
+    )
 
     security_content = f"""# DEVSECOPS — {state['challenge_name']}
 status: READY_FOR_REVIEW

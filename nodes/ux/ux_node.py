@@ -17,12 +17,23 @@ Cada nodo:
 
 from state.cycle_state import CycleState
 from tools.jira_tools import create_story
+from nodes.helper import _get_last_feedback, load_prompt
 
 # ── UX + ARQ Agents (paralelo) ─────────────────────────────────────────────────
 
 def run_ux_node(state: CycleState) -> dict:
     """Nodo UX — invoca al ux-agent (Gemini Pro). Genera UXSPECS.md."""
     print("\n🎨 UX-AGENT: Generando UXSPECS.md...")
+
+    feedback = _get_last_feedback(state, "ux")
+    system_prompt = load_prompt(
+        "ux",
+        challenge_name=state["challenge_name"],
+        challenge_type=state["challenge_type"],
+        challenge_description=state["challenge_description"],
+        prd_content=state.get("prd_content") or "",
+        feedback=feedback or "Sin feedback previo.",
+    )
 
     # STUB
     ux_content = f"""# UXSPECS — {state['challenge_name']}

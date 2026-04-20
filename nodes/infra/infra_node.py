@@ -17,12 +17,23 @@ Cada nodo:
 
 from state.cycle_state import CycleState
 from tools.jira_tools import create_task
+from nodes.helper import _get_last_feedback, load_prompt
 
 # ── INFRA + SEC Agents (paralelo) ──────────────────────────────────────────────
 
 def run_infra_node(state: CycleState) -> dict:
     """Nodo INFRA — genera CDK stack y pipeline CI/CD."""
     print("\n⚙️  INFRA-AGENT: Generando CDK stack...")
+
+    feedback = _get_last_feedback(state, "infra")
+    system_prompt = load_prompt(
+        "infra",
+        challenge_name=state["challenge_name"],
+        challenge_type=state["challenge_type"],
+        arch_content=state.get("arch_content") or "",
+        qa_content=state.get("qa_content") or "",
+        feedback=feedback or "Sin feedback previo.",
+    )
 
     infra_content = f"""# INFESPEOS — {state['challenge_name']}
 status: READY_FOR_REVIEW

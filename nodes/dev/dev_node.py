@@ -1,5 +1,5 @@
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback
+from nodes.helper import _get_last_feedback, load_prompt
 from tools.jira_tools import create_task
 
 # ── DEV Agent ─────────────────────────────────────────────────────────────────
@@ -9,6 +9,16 @@ def run_dev_node(state: CycleState) -> dict:
     print("\n💻 DEV-AGENT: Implementando código...")
 
     feedback = _get_last_feedback(state, "dev")
+    system_prompt = load_prompt(
+        "dev",
+        challenge_name=state["challenge_name"],
+        challenge_type=state["challenge_type"],
+        challenge_description=state["challenge_description"],
+        prd_content=state.get("prd_content") or "",
+        arch_content=state.get("arch_content") or "",
+        ux_content=state.get("ux_content") or "",
+        feedback=feedback or "Sin feedback previo.",
+    )
 
     # STUB — en producción Claude Code clona el repo y trabaja sobre él
     dev_content = f"""# DEVSPECS — {state['challenge_name']}

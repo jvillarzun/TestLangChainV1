@@ -16,11 +16,9 @@ Cada nodo:
 """
 
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback
+from nodes.helper import _get_last_feedback, load_prompt
 from tools.jira_tools import create_story
 
-
-# ── PRD Agent ─────────────────────────────────────────────────────────────────
 
 def run_prd_node(state: CycleState) -> dict:
     """
@@ -29,10 +27,19 @@ def run_prd_node(state: CycleState) -> dict:
     """
     print("\n📋 PRD-AGENT: Generando PRDSPECS.md...")
 
-    # Obtener feedback de rechazo previo si existe
     feedback = _get_last_feedback(state, "prd")
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
+    criteria_str = "\n".join(f"  - {c}" for c in state["challenge_success_criteria"])
+    system_prompt = load_prompt(
+        "prd",
+        challenge_name=state["challenge_name"],
+        challenge_type=state["challenge_type"],
+        challenge_description=state["challenge_description"],
+        challenge_success_criteria=criteria_str,
+        feedback=feedback or "Sin feedback previo.",
+    )
 
     # ── TODO: Invocar Claude Sonnet con el skill prd-template ──────────────
     # from langchain_anthropic import ChatAnthropic
