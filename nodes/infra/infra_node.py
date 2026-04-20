@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output
 from tools.jira_tools import create_task
+from tools.slack_tools import notify_team
 from config.settings import MODEL_INFRA
 
 
@@ -24,12 +25,17 @@ def run_infra_node(state: CycleState) -> dict:
         feedback=feedback or "Sin feedback previo.",
     )
 
-    llm = ChatGoogleGenerativeAI(model=MODEL_INFRA)
-    response = llm.invoke([
-        SystemMessage(content=system_prompt),
-        HumanMessage(content="Genera el INFESPEOS.md completo según las instrucciones."),
-    ])
-    infra_content = response.content
+    try:
+        llm = ChatGoogleGenerativeAI(model=MODEL_INFRA)
+        response = llm.invoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content="Genera el INFESPEOS.md completo según las instrucciones."),
+        ])
+        infra_content = response.content
+    except Exception as e:
+        print(f"[INFRA-AGENT] Error: {e}")
+        notify_team(f"❌ INFRA-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
+        return {"error_phase": "infra_sec", "error_message": str(e), "infra_content": None}
 
     output_path = save_output("INFESPEOS.md", infra_content)
     print(f"   💾 Guardado en {output_path}")
@@ -45,5 +51,7 @@ def run_infra_node(state: CycleState) -> dict:
 
     return {
         "infra_content":   infra_content,
+        "error_phase":     None,
+        "error_message":   None,
         "jira_story_keys": [task_key] if task_key else [],
     }
