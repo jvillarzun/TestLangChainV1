@@ -1,8 +1,5 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from config.settings import MODEL_INFRA
@@ -26,12 +23,12 @@ def run_infra_node(state: CycleState) -> dict:
     )
 
     try:
-        llm = ChatGoogleGenerativeAI(model=MODEL_INFRA)
-        response = llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content="Genera el INFESPEOS.md completo según las instrucciones."),
-        ])
-        infra_content = response.content
+        infra_content = llm_invoke(
+            model=MODEL_INFRA,
+            system_prompt=system_prompt,
+            user_message="Genera el INFESPEOS.md completo según las instrucciones.",
+            stub_content="# INFESPEOS.md stub — TEST_MODE activo",
+        )
     except Exception as e:
         print(f"[INFRA-AGENT] Error: {e}")
         notify_team(f"❌ INFRA-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])

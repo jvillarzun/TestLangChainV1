@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 from state.cycle_state import CycleState
 
 _OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
@@ -33,6 +34,35 @@ def load_prompt(agent: str, **kwargs) -> str:
         def __missing__(self, key: str) -> str:
             return "{" + key + "}"
     return template.format_map(_Safe(kwargs))
+
+
+def create_llm(model: str) -> Any:
+    """Crea instancia LLM. Único lugar para cambiar proveedor (actualmente Groq)."""
+    from langchain_groq import ChatGroq
+    from config.settings import GROQ_API_KEY
+    return ChatGroq(model=model, api_key=GROQ_API_KEY)
+
+
+def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str) -> str:
+    """
+    Wrapper de llamada LLM con soporte TEST_MODE.
+
+    En TEST_MODE retorna stub_content directamente sin llamar al LLM.
+    En modo normal llama al modelo y retorna response.content.
+    Lanza la excepción si el LLM falla (el nodo hace el try/except).
+    """
+    from config.settings import TEST_MODE
+    if TEST_MODE:
+        print("   [TEST_MODE] Usando stub — no se llama al LLM")
+        return stub_content
+
+    from langchain_core.messages import SystemMessage, HumanMessage
+    llm = create_llm(model)
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_message),
+    ])
+    return response.content
 
 
 def save_output(filename: str, content: str) -> Path:

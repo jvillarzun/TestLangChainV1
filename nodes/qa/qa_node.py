@@ -1,8 +1,5 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from config.settings import MODEL_QA
@@ -26,12 +23,12 @@ def run_qa_node(state: CycleState) -> dict:
     )
 
     try:
-        llm = ChatGoogleGenerativeAI(model=MODEL_QA)
-        response = llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content="Genera el QASCPECS.md completo. Termina con 'qa_passed: true' o 'qa_passed: false'."),
-        ])
-        qa_content = response.content
+        qa_content = llm_invoke(
+            model=MODEL_QA,
+            system_prompt=system_prompt,
+            user_message="Genera el QASCPECS.md completo. Termina con 'qa_passed: true' o 'qa_passed: false'.",
+            stub_content="# QASCPECS.md stub\nqa_passed: true",
+        )
     except Exception as e:
         print(f"[QA-AGENT] Error: {e}")
         notify_team(f"❌ QA-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])

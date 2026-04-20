@@ -1,8 +1,5 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from config.settings import MODEL_DEV
@@ -28,12 +25,12 @@ def run_dev_node(state: CycleState) -> dict:
     )
 
     try:
-        llm = ChatGoogleGenerativeAI(model=MODEL_DEV)
-        response = llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content="Genera el DEVSPECS.md completo según las instrucciones."),
-        ])
-        dev_content = response.content
+        dev_content = llm_invoke(
+            model=MODEL_DEV,
+            system_prompt=system_prompt,
+            user_message="Genera el DEVSPECS.md completo según las instrucciones.",
+            stub_content="# DEVSPECS.md stub — TEST_MODE activo",
+        )
     except Exception as e:
         print(f"[DEV-AGENT] Error: {e}")
         notify_team(f"❌ DEV-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])

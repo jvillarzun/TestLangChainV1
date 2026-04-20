@@ -1,8 +1,5 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
 from config.settings import MODEL_PRD
@@ -27,12 +24,12 @@ def run_prd_node(state: CycleState) -> dict:
     )
 
     try:
-        llm = ChatGoogleGenerativeAI(model=MODEL_PRD)
-        response = llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content="Genera el PRDSPECS.md completo según las instrucciones."),
-        ])
-        prd_content = response.content
+        prd_content = llm_invoke(
+            model=MODEL_PRD,
+            system_prompt=system_prompt,
+            user_message="Genera el PRDSPECS.md completo según las instrucciones.",
+            stub_content="# PRDSPECS.md stub — TEST_MODE activo",
+        )
     except Exception as e:
         print(f"[PRD-AGENT] Error: {e}")
         notify_team(f"❌ PRD-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])

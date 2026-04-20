@@ -1,8 +1,5 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
 from config.settings import MODEL_ARCHITECT
@@ -26,12 +23,12 @@ def run_arch_node(state: CycleState) -> dict:
     )
 
     try:
-        llm = ChatGoogleGenerativeAI(model=MODEL_ARCHITECT)
-        response = llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content="Genera el ARQSPECS.md completo según las instrucciones."),
-        ])
-        arch_content = response.content
+        arch_content = llm_invoke(
+            model=MODEL_ARCHITECT,
+            system_prompt=system_prompt,
+            user_message="Genera el ARQSPECS.md completo según las instrucciones.",
+            stub_content="# ARQSPECS.md stub — TEST_MODE activo",
+        )
     except Exception as e:
         print(f"[ARCH-AGENT] Error: {e}")
         notify_team(f"❌ ARCHITECT-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])

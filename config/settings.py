@@ -12,18 +12,22 @@ load_dotenv()
 
 
 # ── LLMs ──────────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY: str = os.environ["ANTHROPIC_API_KEY"]
-GOOGLE_API_KEY: str = os.environ["GOOGLE_API_KEY"]
+# TEST_MODE=true → nodos usan stubs, no llaman al LLM. Ideal para probar HITL/Slack/Jira.
+TEST_MODE: bool = os.environ.get("TEST_MODE", "false").lower() == "true"
 
-# Modelos por agente
-MODEL_ORCHESTRATOR = "gemini-2.0-flash-lite"
-MODEL_PRD          = "gemini-2.0-flash"
-MODEL_UX           = "gemini-2.0-flash"
-MODEL_ARCHITECT    = "gemini-2.0-flash"
-MODEL_DEV          = "gemini-2.0-flash"   # Claude Code usa su propio runtime
-MODEL_QA           = "gemini-2.0-flash"
-MODEL_INFRA        = "gemini-2.0-flash"
-MODEL_SECURITY     = "gemini-2.0-flash"
+GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"
+ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
+GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado, no usado actualmente
+
+# Modelos por agente — todos Groq (cambiar aquí, no en los nodos)
+MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero
+MODEL_PRD          = "llama-3.3-70b-versatile"
+MODEL_UX           = "llama-3.3-70b-versatile"
+MODEL_ARCHITECT    = "llama-3.3-70b-versatile"
+MODEL_DEV          = "llama-3.3-70b-versatile"
+MODEL_QA           = "llama-3.3-70b-versatile"
+MODEL_INFRA        = "llama-3.3-70b-versatile"
+MODEL_SECURITY     = "llama-3.3-70b-versatile"
 
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
