@@ -55,6 +55,7 @@ JIRA_PROJECT_KEY = os.environ.get("JIRA_PROJECT_KEY", "MACH")
 # ── Webhook ────────────────────────────────────────────────────────────────────
 WEBHOOK_BASE_URL = os.environ.get("WEBHOOK_BASE_URL", "http://localhost:8000")
 WEBHOOK_PORT     = int(os.environ.get("WEBHOOK_PORT", "8000"))
+DASHBOARD_URL    = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
 
 
 # ── Checkpointing ──────────────────────────────────────────────────────────────

@@ -6,8 +6,8 @@ con checkpoints Human-in-the-Loop via Slack. Jira para tracking. FastAPI para we
 
 ## Stack
 - Python 3.12 · LangGraph 1.0+ · FastAPI · Pydantic v2
-- `langchain-anthropic` (Claude Opus/Sonnet) · `langchain-google-genai` (Gemini)
-- `slack-sdk` · `jira` (python-jira) · `uvicorn`
+- `langchain-groq` (Llama 3 vía Groq) · `langchain-anthropic` (reservado P3)
+- `slack-sdk` · `jira` (python-jira) · `uvicorn` · `streamlit`
 
 ## Claude Code Skills
 
@@ -28,16 +28,20 @@ Verificar instaladas: `/find-skills` en Claude Code.
 
 ## Arquitectura
 ```
-state/cycle_state.py     → CycleState (TypedDict compartido entre todos los nodos)
-graph/mach_graph.py      → StateGraph: build_graph(), get_graph_config()
-nodes/orchestrator_node.py → init, route, finalize
-nodes/hitl_node.py       → make_hitl_node(phase) — usa interrupt() de LangGraph
-nodes/agent_nodes.py     → 7 agentes stub (reemplazar con LLM real)
-tools/slack_tools.py     → notify_team(), notify_reviewer(), update_hitl_msg()
-tools/jira_tools.py      → create_epic/story/task(), update_issue_status()
-api/slack_webhook.py     → POST /slack/interactive — reanuda el grafo con Command(resume=...)
-config/settings.py       → todas las env vars (no hardcodear credenciales)
-main.py                  → run_cycle(challenge) — punto de entrada
+state/cycle_state.py          → CycleState (TypedDict compartido entre todos los nodos)
+graph/mach_graph.py           → StateGraph: build_graph(), get_graph_config()
+nodes/orchestrator_node.py    → init, route, finalize
+nodes/hitl_node.py            → make_hitl_node(phase) — usa interrupt() de LangGraph
+nodes/helper.py               → load_prompt(), save_output(), create_llm(), llm_invoke()
+nodes/<agente>/<agente>_node.py  → 7 nodos LLM reales (Groq)
+nodes/<agente>/<agente>_prompt.md → prompts editables sin tocar Python
+outputs/                      → entregables generados: PRDSPECS.md, ARQSPECS.md, etc.
+tools/slack_tools.py          → notify_team(), notify_reviewer(), update_hitl_msg()
+tools/jira_tools.py           → create_epic/story/task(), update_issue_status()
+api/slack_webhook.py          → POST /slack/interactive + /deliverables/ (static files)
+dashboard/app.py              → Streamlit dashboard en tiempo real
+config/settings.py            → todas las env vars (no hardcodear credenciales)
+main.py                       → run_cycle(challenge) — punto de entrada
 ```
 
 ## Convenciones de código
@@ -70,16 +74,22 @@ main.py                  → run_cycle(challenge) — punto de entrada
 ```bash
 # Setup
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env  # Crítico: GROQ_API_KEY, SLACK_BOT_TOKEN, JIRA_API_TOKEN
 
-# Correr el ciclo
+# Correr el ciclo (requiere webhook corriendo en otra terminal)
 python main.py
 
-# Servidor webhook (terminal separada)
+# Servidor webhook + entregables en /deliverables/
 uvicorn api.slack_webhook:app --reload --port 8000
 
+# Dashboard Streamlit (requiere CHECKPOINTER=sqlite en .env)
+streamlit run dashboard/app.py --server.port 8501
+
 # Exponer webhook a Slack en dev
-ngrok http 8000
+ngrok http 8000  # Copiar URL → Slack App > Interactivity > Request URL
+
+# Modo test (sin gastar tokens Groq)
+TEST_MODE=true python main.py
 
 # Tests (cuando existan)
 pytest tests/ -v
@@ -87,16 +97,19 @@ pytest tests/ -v
 
 ## Variables de entorno requeridas
 Ver `.env.example`. Críticas para arrancar:
-`ANTHROPIC_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `JIRA_API_TOKEN`
+`GROQ_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `JIRA_API_TOKEN`
+
+Para el dashboard: `CHECKPOINTER=sqlite`, `DASHBOARD_URL=http://localhost:8501`
+Para testing sin tokens: `TEST_MODE=true`
 
 ## Modelo por agente
 | Agente | Modelo | Razón |
 |---|---|---|
-| Todos | `gemini-2.0-flash` | Unificado para hackathon — rápido y económico |
-| Orchestrator | `gemini-2.0-flash-lite` | Routing simple, no necesita capacidad máxima |
-| Dev | Claude Code (subprocess) | Escribe y ejecuta código real (P3) |
+| PRD, UX, ARQ, DEV, QA, INFRA, SEC | `llama-3.3-70b-versatile` | Groq free tier, sin rate limits agresivos |
+| Orchestrator | `llama-3.1-8b-instant` | Routing simple, modelo ligero y rápido |
+| Dev (P3) | Claude Code (subprocess) | Escribe y ejecuta código real |
 
-> Modelos definidos en `config/settings.py` — cambiar ahí sin tocar nodos.
+> Modelos en `config/settings.py`. `create_llm(model)` en `nodes/helper.py` es el único punto para cambiar proveedor.
 
 ## Flujo HITL
 1. Agente termina → guarda output en `state`

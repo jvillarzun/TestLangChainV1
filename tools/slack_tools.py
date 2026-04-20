@@ -21,7 +21,7 @@ from datetime import datetime
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from config.settings import SLACK_BOT_TOKEN, SLACK_USERS, SLACK_TEAM_CHANNEL, WEBHOOK_BASE_URL
+from config.settings import SLACK_BOT_TOKEN, SLACK_USERS, SLACK_TEAM_CHANNEL, WEBHOOK_BASE_URL, DASHBOARD_URL
 
 
 # Singleton del cliente Slack
@@ -191,6 +191,15 @@ def notify_reviewer(
             "type": "section",
             "text": {"type": "mrkdwn", "text": extra_context}
         })
+
+    # Link al dashboard
+    blocks.append({
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": f"📊 *Dashboard en tiempo real:* <{DASHBOARD_URL}/?thread_id={thread_id}|Ver estado del ciclo>"
+        }
+    })
 
     blocks.append({"type": "divider"})
 
