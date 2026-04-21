@@ -1,3 +1,7 @@
+import os
+import json
+import urllib.request
+
 import streamlit as st
 
 from config.settings import CHECKPOINTER
@@ -15,6 +19,53 @@ def render_sidebar() -> tuple[str, bool]:
         st.caption("ADLC Orchestrator Dashboard")
         st.divider()
 
+        with st.expander("🚀 Nuevo ciclo", expanded=False):
+            c_name = st.text_input("Nombre del desafío", value="FraudShield", key="new_c_name")
+            c_type = st.selectbox("Tipo", ["greenfield", "brownfield"], key="new_c_type")
+            c_desc = st.text_area(
+                "Descripción",
+                value="Describe el desafío aquí.",
+                key="new_c_desc",
+                height=80,
+            )
+            c_criteria_raw = st.text_area(
+                "Criterios de éxito (uno por línea)",
+                value="Definir criterios de éxito",
+                key="new_c_criteria",
+                height=70,
+            )
+            if st.button("🚀 Iniciar ciclo", use_container_width=True, type="primary"):
+                criteria = [
+                    l.strip() for l in c_criteria_raw.splitlines() if l.strip()
+                ] or ["Definir criterios de éxito"]
+                _url = (
+                    os.environ.get("WEBHOOK_BASE_URL", "http://mach-api:8000")
+                    + "/api/cycle/start"
+                )
+                try:
+                    _payload = json.dumps({
+                        "challenge_name": c_name,
+                        "challenge_type": c_type,
+                        "challenge_description": c_desc,
+                        "challenge_success_criteria": criteria,
+                    }).encode("utf-8")
+                    _req = urllib.request.Request(
+                        _url,
+                        data=_payload,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(_req, timeout=15) as _resp:
+                        _body = json.loads(_resp.read().decode("utf-8"))
+                    new_tid = _body["thread_id"]
+                    st.session_state["started_thread_id"] = new_tid
+                    st.success(f"¡Ciclo iniciado! `{new_tid[:8]}...`")
+                    st.query_params["thread_id"] = new_tid
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Error al iniciar el ciclo: {exc}")
+
+        st.divider()
         if CHECKPOINTER != "sqlite":
             st.warning(
                 "**CHECKPOINTER=memory** — dashboard no puede leer estado entre procesos.\n\n"

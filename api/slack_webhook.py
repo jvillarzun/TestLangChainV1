@@ -25,6 +25,7 @@ import json
 import hashlib
 import hmac
 import time
+import uuid
 from typing import Any
 from pathlib import Path as _Path
 
@@ -32,8 +33,10 @@ from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.types import Command
+from pydantic import BaseModel, Field
 
 from graph.mach_graph import build_graph, get_graph_config
+from state.cycle_state import initial_state
 from tools.slack_tools import _slack
 from config.settings import SLACK_SIGNING_SECRET
 
@@ -93,7 +96,75 @@ async def health():
     return {"status": "ok", "service": "MACH Race Slack Webhook"}
 
 
-@app.get("/view/{filename}", response_class=HTMLResponse)
+# ── Cycle start ───────────────────────────────────────────────────────────────
+
+class CycleStartRequest(BaseModel):
+    challenge_name: str = Field(default="New Challenge")
+    challenge_type: str = Field(default="greenfield")
+    challenge_description: str = Field(default="Describe the challenge here.")
+    challenge_success_criteria: list[str] = Field(default_factory=lambda: ["Define success criteria"])
+
+
+def _run_graph_background(state: dict, config: dict, thread_id: str) -> None:
+    """Runs graph.invoke in a background thread until the first interrupt()."""
+    try:
+        print(f"\n[Cycle] Iniciando grafo para thread {thread_id[:8]}...")
+        _graph.invoke(state, config=config)
+        print(f"[Cycle] Grafo pausado/completado para thread {thread_id[:8]}")
+    except Exception as e:
+        print(f"[Cycle] Error en thread {thread_id[:8]}: {e}")
+
+
+@app.post("/api/cycle/start")
+async def start_cycle(body: CycleStartRequest, background_tasks: BackgroundTasks):
+    """
+    Arranca un nuevo ciclo ADLC. Genera un thread_id, inicializa el estado
+    y lanza el grafo en background hasta el primer interrupt() (PRD).
+    Retorna inmediatamente con el thread_id para que el cliente pueda
+    seguir el progreso desde el dashboard.
+    """
+    thread_id = str(uuid.uuid4())
+    state = initial_state(
+        thread_id=thread_id,
+        challenge_name=body.challenge_name,
+        challenge_type=body.challenge_type,  # type: ignore[arg-type]
+        challenge_description=body.challenge_description,
+        challenge_success_criteria=body.challenge_success_criteria,
+    )
+    config = get_graph_config(thread_id)
+    background_tasks.add_task(_run_graph_background, state, config, thread_id)
+    return {"status": "started", "thread_id": thread_id}
+
+
+class CycleResumeRequest(BaseModel):
+    thread_id: str
+    decision: str  # "approve" | "reject"
+
+
+def _resume_graph_background(thread_id: str, decision: str) -> None:
+    """Resumes a paused graph with a manual approve/reject decision."""
+    try:
+        config = get_graph_config(thread_id)
+        print(f"\n[Resume] thread={thread_id[:8]}  decision={decision}")
+        _graph.invoke(
+            Command(resume={"decision": decision, "feedback": None, "reviewer": "dashboard", "timestamp": _now()}),
+            config=config,
+        )
+        print(f"[Resume] Grafo avanzado para thread {thread_id[:8]}")
+    except Exception as e:
+        print(f"[Resume] Error en thread {thread_id[:8]}: {e}")
+
+
+@app.post("/api/cycle/resume")
+async def resume_cycle(body: CycleResumeRequest, background_tasks: BackgroundTasks):
+    """
+    Reanuda un ciclo pausado en un checkpoint HITL desde el dashboard.
+    Acepta decision='approve' o 'reject'.
+    """
+    if body.decision not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="decision debe ser 'approve' o 'reject'")
+    background_tasks.add_task(_resume_graph_background, body.thread_id, body.decision)
+    return {"status": "resuming", "thread_id": body.thread_id, "decision": body.decision}
 async def view_deliverable(filename: str):
     """Renderiza un .md de outputs/ como HTML con sintaxis resaltada."""
     if not filename.endswith(".md") or "/" in filename or ".." in filename:

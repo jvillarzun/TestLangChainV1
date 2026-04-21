@@ -61,3 +61,7 @@ DASHBOARD_URL    = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
 # ── Checkpointing ──────────────────────────────────────────────────────────────
 CHECKPOINTER     = os.environ.get("CHECKPOINTER", "memory")
 SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
+
+# ── Feature flags ─────────────────────────────────────────────────────────────
+# SHOW_MANUAL_CONTROLS=true → muestra botones Aprobar/Rechazar en el dashboard
+SHOW_MANUAL_CONTROLS: bool = os.getenv("SHOW_MANUAL_CONTROLS", "false").lower() == "true"

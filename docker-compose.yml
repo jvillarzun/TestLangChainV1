@@ -1,0 +1,66 @@
+services:
+
+  # ── FastAPI — Slack webhook + entregables estáticos ─────────────────────────
+  mach-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mach-api
+    command: uvicorn api.slack_webhook:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - .env
+    environment:
+      # Forzar SQLite y apuntar al volumen compartido
+      CHECKPOINTER: sqlite
+      SQLITE_PATH: /app/data/mach_cycle.db
+    ports:
+      - "8000:8000"
+    volumes:
+      # Código fuente montado para hot-reload con uvicorn --reload
+      - .:/app:z
+      # Base de datos SQLite compartida con el dashboard
+      - mach-data:/app/data
+      # Entregables generados por los agentes
+      - mach-outputs:/app/outputs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ── Streamlit Dashboard ──────────────────────────────────────────────────────
+  mach-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mach-dashboard
+    command: streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --server.fileWatcherType poll
+    env_file:
+      - .env
+    environment:
+      CHECKPOINTER: sqlite
+      SQLITE_PATH: /app/data/mach_cycle.db
+      # Dashboard calls mach-api using Docker's internal DNS
+      WEBHOOK_BASE_URL: http://mach-api:8000
+      STREAMLIT_SERVER_FILE_WATCHER_TYPE: poll
+      SHOW_MANUAL_CONTROLS: ${SHOW_MANUAL_CONTROLS:-false}
+    ports:
+      - "8501:8501"
+    volumes:
+      # Código fuente montado para hot-reload con poll watcher
+      - .:/app:z
+      # Mismo volumen compartido — lee el .db que escribe mach-api
+      - mach-data:/app/data
+      - mach-outputs:/app/outputs
+    depends_on:
+      - mach-api
+    restart: unless-stopped
+
+# ── Volúmenes nombrados ────────────────────────────────────────────────────────
+volumes:
+  # Persiste mach_cycle.db entre reinicios y entre servicios
+  mach-data:
+  # Persiste PRDSPECS.md, ARQSPECS.md, etc. entre reinicios y entre servicios
+  mach-outputs:
