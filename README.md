@@ -183,6 +183,64 @@ source .venv/bin/activate
 python main.py webhook
 ```
 
+### Opción 4: con Docker Compose (recomendado para producción)
+
+Levanta todos los servicios en contenedores:
+
+```bash
+docker-compose up -d
+```
+
+Esto arranca:
+
+- **mach-orchestrator**: el ciclo principal (modo `main.py` normal)
+- **mach-webhook**: FastAPI en puerto 8000 (uvicorn)
+- **mach-dashboard**: Streamlit en puerto 8501
+- **sqlite volume**: volumen compartido `mach-data` para persistencia
+
+Acceso a los servicios:
+
+```text
+Webhook:       http://localhost:8000
+Dashboard:     http://localhost:8501
+Logs en vivo:  docker-compose logs -f mach-orchestrator
+```
+
+Ver estado de los contenedores:
+
+```bash
+docker-compose ps
+docker-compose logs
+```
+
+Detener:
+
+```bash
+docker-compose down
+```
+
+**Notas importantes para Docker:**
+
+- El archivo `.env` DEBE estar presente en la raíz del proyecto. Los contenedores lo leen en startup.
+- Dentro del contenedor, `SQLITE_PATH=/app/data/mach_cycle.db` apunta al volumen compartido. No cambies esta ruta.
+- El webhook necesita ser expuesto públicamente para que Slack envíe eventos. Usa Cloudflare Tunnel o ngrok afuera del contenedor:
+
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
+Luego actualiza en `.env`:
+
+```env
+WEBHOOK_BASE_URL=https://tu-tunnel.trycloudflare.com
+```
+
+Y configura en Slack App > Interactivity > Request URL:
+
+```text
+https://tu-tunnel.trycloudflare.com/slack/interactive
+```
+
 ## Dashboard
 
 Para usar el dashboard entre procesos necesitas persistencia real. Configura:
