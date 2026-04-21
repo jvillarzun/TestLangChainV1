@@ -47,7 +47,8 @@ El routing post-HITL usa conditional edges que leen `current_phase`:
 - FastAPI + Uvicorn
 - Slack SDK
 - python-jira
-- Streamlit
+- Streamlit (dashboard legacy)
+- Vue.js 3 + Vite + TailwindCSS (frontend moderno)
 - Pydantic v2
 - LangChain + Groq
 
@@ -62,7 +63,8 @@ api/slack_webhook.py       # Webhook para botones y modales de Slack
 nodes/                     # Nodos del orquestador, agentes e HITL
 tools/slack_tools.py       # Notificaciones y mensajes interactivos
 tools/jira_tools.py        # Integración con Jira
-dashboard/app.py           # Dashboard Streamlit
+dashboard/app.py           # Dashboard Streamlit (legacy)
+frontend/                  # Dashboard Vue.js moderno (Race Control)
 outputs/                   # Entregables generados
 ```
 
@@ -183,9 +185,67 @@ source .venv/bin/activate
 python main.py webhook
 ```
 
-## Dashboard
+### Opción 4: con Docker Compose (recomendado para demo/producción)
 
-Para usar el dashboard entre procesos necesitas persistencia real. Configura:
+Levanta todos los servicios en contenedores:
+
+```bash
+docker-compose up -d --build
+```
+
+Esto arranca:
+
+- **mach-api**: FastAPI backend en puerto 8000
+- **mach-frontend**: Vue.js frontend (Race Control) en puerto 5173
+- **sqlite volume**: volumen compartido `mach-data` para persistencia
+
+Acceso a los servicios:
+
+```text
+Backend API:   http://localhost:8000
+Frontend UI:   http://localhost:5173
+Logs en vivo:  docker-compose logs -f
+```
+
+Ver estado de los contenedores:
+
+```bash
+docker-compose ps
+docker-compose logs mach-frontend
+```
+
+Detener:
+
+```bash
+docker-compose down
+```
+
+**Notas importantes para Docker:**
+
+- El archivo `.env` DEBE estar presente en la raíz del proyecto. Los contenedores lo leen en startup.
+- El frontend Vue.js se construye optimizado para producción con nginx.
+- El proxy `/api` y `/deliverables` del frontend apunta automáticamente a `mach-api:8000` dentro de Docker.
+- Para exponer el webhook a Slack, usa Cloudflare Tunnel o ngrok afuera del contenedor:
+
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
+Luego actualiza en `.env`:
+
+```env
+WEBHOOK_BASE_URL=https://tu-tunnel.trycloudflare.com
+```
+
+Y configura en Slack App > Interactivity > Request URL:
+
+```text
+https://tu-tunnel.trycloudflare.com/slack/interactive
+```
+
+## Dashboard Streamlit (Legacy)
+
+Para usar el dashboard Streamlit entre procesos necesitas persistencia real. Configura:
 
 ```env
 CHECKPOINTER=sqlite
@@ -206,6 +266,45 @@ El dashboard permite:
 - Ver decisiones HITL
 - Ver entregables generados
 - Ver datos de Jira
+
+## Frontend Dashboard (Race Control)
+
+Nueva UI moderna construida con Vue.js 3, Vite y TailwindCSS.
+
+### Instalación
+
+```bash
+cd frontend
+npm install
+```
+
+### Desarrollo
+
+```bash
+npm run dev
+```
+
+Por defecto corre en `http://localhost:5173`
+
+### Build para producción
+
+```bash
+npm run build
+npm run preview
+```
+
+### Características
+
+- **Race Track Visual**: Timeline animado mostrando progreso de fases
+- **Editor de Prompts**: Editar prompts de agentes en vivo
+- **New Cycle**: Interfaz para iniciar nuevos ciclos ADLC
+- **Estado en tiempo real**: Consume API del backend para mostrar estado del ciclo
+- **Responsive**: Diseño adaptativo con TailwindCSS
+
+### Requisitos
+
+- Node.js 18+ / npm 9+
+- Backend corriendo en `http://localhost:8000` (configurable en `vite.config.js`)
 
 ## Integración con Slack en local
 
@@ -341,8 +440,14 @@ python main.py webhook
 # Ejecutar webhook + ciclo
 python main.py both
 
-# Ejecutar dashboard
+# Ejecutar dashboard Streamlit (legacy)
 streamlit run dashboard/app.py --server.port 8501
+
+# Ejecutar frontend Vue.js (Race Control)
+cd frontend && npm run dev
+
+# Build frontend para producción
+cd frontend && npm run build
 
 # Exponer webhook local
 ngrok http 8000
