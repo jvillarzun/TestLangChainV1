@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-asphalt font-mono;
+  }
+  * {
+    @apply border-slate-700;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-race-red hover:bg-red-700 text-white font-semibold px-4 py-2 rounded transition-colors duration-150;
+  }
+  .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded transition-colors duration-150;
+  }
+  .card {
+    @apply bg-slate-900 border border-slate-700 rounded-lg p-4;
+  }
+  .phase-badge {
+    @apply text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wider;
+  }
+}
+
+/* Car animation */
+.car-position {
+  transition: transform 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Track kerb pattern */
+.track-kerb {
+  background: repeating-linear-gradient(
+    90deg,
+    #dc2626 0px,
+    #dc2626 12px,
+    #ffffff 12px,
+    #ffffff 24px
+  );
+}
+
+/* Checkpoint pulse */
+@keyframes checkpoint-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+}
+.checkpoint-active {
+  animation: checkpoint-pulse 1.2s ease-in-out infinite;
+}

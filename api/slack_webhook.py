@@ -31,14 +31,26 @@ from pathlib import Path as _Path
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from langgraph.types import Command
 
-from graph.mach_graph import build_graph, get_graph_config
+from graph.singleton import get_graph
+from graph.mach_graph import get_graph_config
 from tools.slack_tools import _slack
 from config.settings import SLACK_SIGNING_SECRET
+from api.control import router as control_router
 
 
 app = FastAPI(title="MACH Race — Slack HITL Webhook")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(control_router)
 
 _outputs_dir = _Path(__file__).parent.parent / "outputs"
 _outputs_dir.mkdir(exist_ok=True)
@@ -46,8 +58,7 @@ _outputs_dir.mkdir(exist_ok=True)
 # Raw files en /deliverables (para descargas)
 app.mount("/deliverables", StaticFiles(directory=str(_outputs_dir)), name="deliverables")
 
-# Grafo compartido — singleton (el checkpointer guarda el estado por thread_id)
-_graph = build_graph()
+_graph = get_graph()
 
 
 # ── Endpoint principal ────────────────────────────────────────────────────────
@@ -231,7 +242,7 @@ def _resume_graph(thread_id: str, resume_payload: dict):
     print(f"  Decisión: {resume_payload['decision']}")
 
     try:
-        result = _graph.invoke(
+        result = get_graph().invoke(
             Command(resume=resume_payload),
             config=config,
         )

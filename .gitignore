@@ -72,3 +72,11 @@ htmlcov/
 # Local dev / Claude
 .claude/*
 !.claude/settings.json
+
+# Frontend (Vue / Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.local
+frontend/.env
+frontend/.env.*
