@@ -382,7 +382,7 @@ const activeTest   = ref(null)
 const testInputs   = reactive({})
 const testState    = reactive({})
 
-const DEFAULT_MODEL_ID = 'llama-3.3-70b-versatile'
+const defaultModelId = computed(() => models.value.find(m => m.default)?.id || models.value[0]?.id || 'llama-3.3-70b-versatile')
 
 const totalChunks = computed(() => agents.value.reduce((s, a) => s + a.chunks, 0))
 const totalDocs   = computed(() => agents.value.reduce((s, a) => s + a.documents.length, 0))
@@ -419,7 +419,7 @@ function toggleTest(agent) {
   if (!testInputs[agent]) {
     testInputs[agent] = {
       prompt: '',
-      modelA: DEFAULT_MODEL_ID,
+      modelA: defaultModelId.value,
       modelB: 'llama-3.1-8b-instant',
       abMode: false,
     }

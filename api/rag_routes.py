@@ -15,19 +15,22 @@ Endpoints:
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
+from config.settings import MODEL_DEV as _DEFAULT_MODEL
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
 
 _VALID_AGENTS = {"prd", "ux", "arch", "dev", "qa", "infra", "sec"}
 _VALID_EXTENSIONS = {".txt", ".md", ".py", ".kt", ".swift", ".java", ".pdf", ".ts", ".js"}
 
-GROQ_MODELS = [
-    {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B",       "default": True},
+_MODEL_LIST = [
+    {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B"},
     {"id": "llama-3.1-70b-versatile", "label": "Llama 3.1 70B"},
     {"id": "llama-3.1-8b-instant",    "label": "Llama 3.1 8B (fast)"},
     {"id": "mixtral-8x7b-32768",      "label": "Mixtral 8x7B"},
     {"id": "gemma2-9b-it",            "label": "Gemma 2 9B"},
 ]
+# El default lo toma de settings.py (MODEL_DEV) — si cambia ahí, refleja aquí
+GROQ_MODELS = [{**m, "default": m["id"] == _DEFAULT_MODEL} for m in _MODEL_LIST]
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 
