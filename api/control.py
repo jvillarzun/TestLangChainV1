@@ -118,6 +118,8 @@ def get_cycle_status(thread_id: str):
         "jira_epic_key": vals.get("jira_epic_key"),
         "error_phase": vals.get("error_phase"),
         "error_message": vals.get("error_message"),
+        "dev_pr_urls": vals.get("dev_pr_urls", []),
+        "dev_pr_url": vals.get("dev_pr_url"),
     }
 
 
@@ -137,3 +139,56 @@ def get_recent_cycles():
     except Exception:
         pass
     return {"threads": []}
+
+
+class CycleResume(BaseModel):
+    thread_id: str
+    decision: str  # "approve" or "reject"
+    feedback: str = ""
+
+
+@router.post("/cycle/resume")
+def resume_cycle(body: CycleResume):
+    """
+    Reanuda un ciclo pausado en checkpoint HITL.
+    
+    Usado por el frontend Vue.js para aprobar/rechazar fases sin Slack.
+    """
+    from datetime import datetime, timezone
+    from langgraph.types import Command
+    from graph.singleton import get_graph
+    from graph.mach_graph import get_graph_config
+
+    thread_id = body.thread_id
+    decision = body.decision
+    feedback = body.feedback or ""
+
+    if decision not in ["approve", "reject"]:
+        raise HTTPException(400, "decision must be 'approve' or 'reject'")
+
+    print(f"\n[Control] Reanudando ciclo {thread_id[:8]}...")
+    print(f"  Decisión: {decision}")
+    print(f"  Feedback: {feedback or '(ninguno)'}")
+
+    graph = get_graph()
+    config = get_graph_config(thread_id)
+
+    resume_payload = {
+        "decision": decision,
+        "feedback": feedback if decision == "reject" else None,
+        "reviewer": "frontend-manual",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        # Reanudar el grafo con Command(resume=...)
+        graph.invoke(
+            Command(resume=resume_payload),
+            config=config,
+        )
+        print(f"[Control] Ciclo reanudado exitosamente")
+        return {"ok": True, "message": "Ciclo reanudado exitosamente"}
+    except Exception as e:
+        print(f"[Control] Error al reanudar: {e}")
+        raise HTTPException(500, f"Error al reanudar el ciclo: {str(e)}")
+

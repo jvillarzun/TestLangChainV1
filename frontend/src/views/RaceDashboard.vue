@@ -69,14 +69,76 @@
         <div class="text-red-300 text-xs mt-1 font-mono">{{ store.status.error_message }}</div>
       </div>
 
-      <!-- HITL pending notice -->
-      <div v-if="store.status?.hitl_pending_phase" class="card border-orange-500/50 bg-orange-500/5 flex items-center gap-3">
-        <span class="text-2xl">⏸</span>
-        <div>
-          <div class="text-orange-300 font-semibold text-sm">Esperando aprobación humana</div>
-          <div class="text-slate-400 text-xs mt-0.5">
-            Fase <strong class="text-white">{{ store.status.hitl_pending_phase.toUpperCase() }}</strong>
-            — revisar DM en Slack
+      <!-- HITL pending notice with manual controls -->
+      <div v-if="store.status?.hitl_pending_phase" class="card border-orange-500/50 bg-orange-500/5">
+        <div class="flex items-start gap-3 mb-4">
+          <span class="text-2xl">⏸</span>
+          <div class="flex-1">
+            <div class="text-orange-300 font-semibold text-sm">Esperando aprobación humana</div>
+            <div class="text-slate-400 text-xs mt-0.5">
+              Fase <strong class="text-white">{{ store.status.hitl_pending_phase.toUpperCase() }}</strong>
+              — puedes aprobar/rechazar aquí o desde Slack
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual HITL Controls -->
+        <div class="space-y-3">
+          <!-- Action buttons -->
+          <div class="flex gap-2">
+            <button
+              @click="approvePhase"
+              :disabled="isSubmitting"
+              class="flex-1 px-4 py-2 rounded font-medium text-sm transition-all"
+              :class="isSubmitting 
+                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white'"
+            >
+              {{ isSubmitting ? '⏳ Procesando...' : '✅ Aprobar Fase' }}
+            </button>
+            <button
+              @click="toggleRejectForm"
+              :disabled="isSubmitting"
+              class="flex-1 px-4 py-2 rounded font-medium text-sm transition-all"
+              :class="isSubmitting 
+                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                : showFeedbackForm 
+                  ? 'bg-slate-700 text-slate-300' 
+                  : 'bg-red-600 hover:bg-red-700 text-white'"
+            >
+              {{ showFeedbackForm ? '↩ Cancelar' : '❌ Rechazar / Enviar Feedback' }}
+            </button>
+          </div>
+
+          <!-- Feedback form (shown on reject) -->
+          <div v-if="showFeedbackForm" class="space-y-2 animate-slide-in">
+            <label class="block text-xs text-slate-400 font-semibold">Motivo del rechazo:</label>
+            <textarea
+              v-model="feedbackText"
+              placeholder="Describe qué debe corregirse en esta fase..."
+              rows="4"
+              class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-colors resize-none"
+            ></textarea>
+            <button
+              @click="rejectPhase"
+              :disabled="isSubmitting || !feedbackText.trim()"
+              class="w-full px-4 py-2 rounded font-medium text-sm transition-all"
+              :class="isSubmitting || !feedbackText.trim()
+                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                : 'bg-red-600 hover:bg-red-700 text-white'"
+            >
+              {{ isSubmitting ? '⏳ Enviando...' : 'Confirmar Rechazo' }}
+            </button>
+          </div>
+
+          <!-- Error message -->
+          <div v-if="submitError" class="text-red-400 text-xs bg-red-500/10 border border-red-500/30 rounded px-3 py-2">
+            ⚠ Error: {{ submitError }}
+          </div>
+
+          <!-- Success message -->
+          <div v-if="submitSuccess" class="text-emerald-400 text-xs bg-emerald-500/10 border border-emerald-500/30 rounded px-3 py-2">
+            ✅ {{ submitSuccess }}
           </div>
         </div>
       </div>
@@ -115,6 +177,35 @@
           </a>
         </div>
       </div>
+
+      <!-- Pull Requests Generados -->
+      <div v-if="prUrls.length > 0" class="card border-emerald-500/30 bg-emerald-500/5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-2xl">🔗</span>
+          <h3 class="text-emerald-300 font-semibold text-sm">Pull Requests Generados</h3>
+          <span class="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">{{ prUrls.length }}</span>
+        </div>
+        <div class="space-y-2">
+          <a
+            v-for="(url, index) in prUrls" :key="url"
+            :href="url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-3 p-3 rounded bg-slate-800 border border-emerald-600/30 hover:border-emerald-500 hover:bg-emerald-500/10 transition-all group"
+          >
+            <span class="text-xl">🚀</span>
+            <div class="flex-1">
+              <div class="text-white font-medium text-sm group-hover:text-emerald-400 transition-colors">
+                {{ getRepoLabel(url) }} Pull Request
+              </div>
+              <div class="text-xs text-slate-400 font-mono truncate mt-0.5">{{ url }}</div>
+            </div>
+            <svg class="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+            </svg>
+          </a>
+        </div>
+      </div>
     </div>
 
     <!-- Recent cycles -->
@@ -143,6 +234,13 @@ const store = useCycleStore()
 const inputThread = ref(store.threadId)
 const recentThreads = ref([])
 
+// HITL manual controls state
+const showFeedbackForm = ref(false)
+const feedbackText = ref('')
+const isSubmitting = ref(false)
+const submitError = ref(null)
+const submitSuccess = ref(null)
+
 const DELIVERABLE_FILES = [
   'PRDSPECS.md', 'UXSPECS.md', 'ARQSPECS.md',
   'DEVSPECS.md', 'QASPECS.md', 'INFESPECS.md', 'DEVSECOPS.md'
@@ -159,6 +257,16 @@ const phaseColor = computed(() =>
   PHASE_COLORS[store.status?.current_phase] || '#94a3b8'
 )
 
+// Pull Requests URLs del agente DEV
+const prUrls = computed(() => {
+  const urls = store.status?.dev_pr_urls || []
+  // Fallback: si dev_pr_urls está vacío pero existe dev_pr_url, usarlo
+  if (urls.length === 0 && store.status?.dev_pr_url) {
+    return [store.status.dev_pr_url]
+  }
+  return urls
+})
+
 function loadThread() {
   if (inputThread.value.trim()) {
     store.setThread(inputThread.value.trim())
@@ -170,11 +278,106 @@ function togglePolling() {
   else store.startPolling()
 }
 
+function toggleRejectForm() {
+  showFeedbackForm.value = !showFeedbackForm.value
+  if (!showFeedbackForm.value) {
+    feedbackText.value = ''
+  }
+  submitError.value = null
+  submitSuccess.value = null
+}
+
+async function approvePhase() {
+  if (!store.threadId || isSubmitting.value) return
+  
+  isSubmitting.value = true
+  submitError.value = null
+  submitSuccess.value = null
+
+  try {
+    const response = await fetch('/api/cycle/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        thread_id: store.threadId,
+        decision: 'approve',
+        feedback: ''
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `Error ${response.status}`)
+    }
+
+    submitSuccess.value = 'Fase aprobada exitosamente. Actualizando estado...'
+    
+    // Wait a bit and reload state
+    setTimeout(() => {
+      store.fetchStatus()
+      submitSuccess.value = null
+    }, 1500)
+  } catch (error) {
+    submitError.value = error.message
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+async function rejectPhase() {
+  if (!store.threadId || isSubmitting.value || !feedbackText.value.trim()) return
+
+  isSubmitting.value = true
+  submitError.value = null
+  submitSuccess.value = null
+
+  try {
+    const response = await fetch('/api/cycle/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        thread_id: store.threadId,
+        decision: 'reject',
+        feedback: feedbackText.value.trim()
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `Error ${response.status}`)
+    }
+
+    submitSuccess.value = 'Feedback enviado exitosamente. El agente re-ejecutará la fase.'
+    feedbackText.value = ''
+    showFeedbackForm.value = false
+    
+    // Wait a bit and reload state
+    setTimeout(() => {
+      store.fetchStatus()
+      submitSuccess.value = null
+    }, 1500)
+  } catch (error) {
+    submitError.value = error.message
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 function formatTime(iso) {
   if (!iso) return ''
   try {
     return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
   } catch { return iso }
+}
+
+function getRepoLabel(url) {
+  if (!url) return 'GitHub'
+  const lower = url.toLowerCase()
+  if (lower.includes('backend')) return '🏭 Backend'
+  if (lower.includes('frontend')) return '🎨 Frontend'
+  // Intentar extraer el nombre del repo de la URL
+  const match = url.match(/github\.com\/[^\/]+\/([^\/]+)/)
+  return match ? match[1] : 'GitHub'
 }
 
 onMounted(async () => {
