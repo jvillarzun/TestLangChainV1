@@ -204,34 +204,31 @@
               </Transition>
 
               <!-- Outputs -->
-              <div :class="testInputs[agent.agent]?.abMode && testState[agent.agent]?.outputB ? 'grid grid-cols-2 gap-3' : ''">
+              <div :class="testInputs[agent.agent]?.abMode && testState[agent.agent]?.artifactB ? 'grid grid-cols-2 gap-3' : ''">
                 <!-- Output A -->
                 <Transition name="fade">
                   <AgentOutput
-                    v-if="testState[agent.agent]?.outputA"
-                    :output="testState[agent.agent].outputA"
-                    :model="testState[agent.agent].modelA"
-                    :rag-used="testState[agent.agent].ragUsed"
-                    :rag-chars="testState[agent.agent].ragChars"
+                    v-if="testState[agent.agent]?.artifactA"
+                    :artifact-url="testState[agent.agent].artifactA.url"
+                    :artifact-type="testState[agent.agent].artifactA.type"
+                    :model="testState[agent.agent].artifactA.model"
+                    :rag-used="testState[agent.agent].artifactA.ragUsed"
+                    :rag-chars="testState[agent.agent].artifactA.ragChars"
                     :label="testInputs[agent.agent]?.abMode ? 'A' : ''"
-                    :agent="agent.agent"
-                    slot-name="A"
-                    @download="downloadOutput(agent.agent, 'A')"
+                    variant="violet"
                   />
                 </Transition>
                 <!-- Output B -->
                 <Transition name="fade">
                   <AgentOutput
-                    v-if="testState[agent.agent]?.outputB"
-                    :output="testState[agent.agent].outputB"
-                    :model="testState[agent.agent].modelB"
-                    :rag-used="testState[agent.agent].ragUsed"
-                    :rag-chars="testState[agent.agent].ragChars"
+                    v-if="testState[agent.agent]?.artifactB"
+                    :artifact-url="testState[agent.agent].artifactB.url"
+                    :artifact-type="testState[agent.agent].artifactB.type"
+                    :model="testState[agent.agent].artifactB.model"
+                    :rag-used="testState[agent.agent].artifactB.ragUsed"
+                    :rag-chars="testState[agent.agent].artifactB.ragChars"
                     label="B"
-                    :agent="agent.agent"
-                    slot-name="B"
                     variant="amber"
-                    @download="downloadOutput(agent.agent, 'B')"
                   />
                 </Transition>
               </div>
@@ -267,54 +264,44 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, computed, defineComponent, h } from 'vue'
+import { ref, onMounted, reactive, computed, watch, defineComponent, h } from 'vue'
 
-// ── Sub-componente AgentOutput (inline) ───────────────────────────────────────
+// ── Sub-componente AgentOutput — carga artefacto desde URL ───────────────────
 const AgentOutput = defineComponent({
   name: 'AgentOutput',
   props: {
-    output:   String,
-    model:    String,
-    ragUsed:  Boolean,
-    ragChars: Number,
-    label:    { type: String, default: '' },
-    agent:    String,
-    slotName: String,
-    variant:  { type: String, default: 'violet' },
+    artifactUrl:  String,
+    artifactType: String,   // 'html' | 'md'
+    model:        String,
+    ragUsed:      Boolean,
+    ragChars:     Number,
+    label:        { type: String, default: '' },
+    variant:      { type: String, default: 'violet' },
   },
-  emits: ['download'],
-  setup(props, { emit }) {
-    const activeTab = ref('preview')
+  setup(props) {
+    const activeTab  = ref('preview')
+    const mdContent  = ref('')
+    const mdLoading  = ref(false)
 
-    const isHtml = computed(() => {
-      const o = props.output || ''
-      return o.includes('<!DOCTYPE html') || o.includes('<html') || o.includes('```html')
-    })
-
-    const htmlContent = computed(() => {
-      if (!isHtml.value) return ''
-      const o = props.output || ''
-      // Extract from code block if present
-      const match = o.match(/```html\n?([\s\S]*?)```/)
-      return match ? match[1] : o
-    })
-
-    const blobUrl = computed(() => {
-      if (!htmlContent.value) return ''
-      return URL.createObjectURL(new Blob([htmlContent.value], { type: 'text/html' }))
-    })
-
-    const artifactType = computed(() => isHtml.value ? 'html' : 'md')
+    // Para MD: fetch el contenido para mostrarlo en el pre
+    watch(() => props.artifactUrl, async (url) => {
+      if (!url || props.artifactType !== 'md') return
+      mdLoading.value = true
+      try {
+        const r = await fetch(url)
+        mdContent.value = await r.text()
+      } catch { mdContent.value = '(error cargando archivo)' }
+      finally { mdLoading.value = false }
+    }, { immediate: true })
 
     const borderColor = computed(() =>
       props.variant === 'amber' ? 'border-amber-700/40' : 'border-violet-700/30'
     )
-    const labelColor = computed(() =>
-      props.variant === 'amber' ? 'text-amber-400' : 'text-violet-400'
-    )
 
     return () => {
-      const label = props.label ? h('span', { class: `text-xs font-bold px-1.5 py-0.5 rounded ${props.variant === 'amber' ? 'bg-amber-900/40 text-amber-300' : 'bg-violet-900/40 text-violet-300'}` }, props.label) : null
+      const label = props.label
+        ? h('span', { class: `text-xs font-bold px-1.5 py-0.5 rounded ${props.variant === 'amber' ? 'bg-amber-900/40 text-amber-300' : 'bg-violet-900/40 text-violet-300'}` }, props.label)
+        : null
 
       const meta = h('div', { class: 'flex items-center gap-2 flex-wrap' }, [
         label,
@@ -322,16 +309,18 @@ const AgentOutput = defineComponent({
           ? h('span', { class: 'text-emerald-400 text-xs' }, `📚 RAG (${props.ragChars}ch)`)
           : h('span', { class: 'text-slate-600 text-xs' }, 'Sin RAG'),
         h('span', { class: 'text-slate-600 text-xs' }, `· ${props.model}`),
-        h('span', { class: 'text-slate-600 text-xs' }, `· ${artifactType.value.toUpperCase()}`),
+        h('span', { class: `text-xs font-semibold ${props.artifactType === 'html' ? 'text-orange-400' : 'text-blue-400'}` },
+          `· ${(props.artifactType || '').toUpperCase()}`),
       ])
 
-      const downloadBtn = h('button', {
-        onClick: () => emit('download'),
+      const downloadBtn = h('a', {
+        href: props.artifactUrl,
+        download: true,
         class: 'text-xs text-slate-500 hover:text-white border border-slate-600 hover:border-slate-400 rounded px-2 py-0.5 transition-colors',
       }, '↓ Descargar')
 
       let content
-      if (isHtml.value) {
+      if (props.artifactType === 'html') {
         const tabs = h('div', { class: 'flex gap-1 mb-2' }, [
           h('button', {
             onClick: () => activeTab.value = 'preview',
@@ -342,22 +331,14 @@ const AgentOutput = defineComponent({
             class: `text-xs px-3 py-1 rounded-t border-b-2 transition-colors ${activeTab.value === 'code' ? 'border-violet-500 text-violet-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`,
           }, '📝 Código'),
         ])
-
-        const preview = activeTab.value === 'preview'
-          ? h('iframe', {
-              src: blobUrl.value,
-              class: 'w-full h-80 rounded-lg border border-slate-700 bg-white',
-              sandbox: 'allow-scripts',
-            })
-          : h('pre', {
-              class: 'bg-slate-900 rounded-lg p-3 text-xs text-slate-300 overflow-auto max-h-80 whitespace-pre-wrap',
-            }, props.output)
-
-        content = h('div', {}, [tabs, preview])
+        const body = activeTab.value === 'preview'
+          ? h('iframe', { src: props.artifactUrl, class: 'w-full h-80 rounded-lg border border-slate-700 bg-white', sandbox: 'allow-scripts' })
+          : h('iframe', { src: props.artifactUrl, class: 'w-full h-80 rounded-lg border border-slate-700 bg-slate-900 font-mono text-xs' })
+        content = h('div', {}, [tabs, body])
       } else {
-        content = h('pre', {
-          class: 'bg-slate-900 rounded-lg p-4 text-xs text-slate-300 overflow-auto max-h-96 whitespace-pre-wrap',
-        }, props.output)
+        content = mdLoading.value
+          ? h('div', { class: 'text-slate-500 text-xs animate-pulse p-3' }, 'Cargando...')
+          : h('pre', { class: 'bg-slate-900 rounded-lg p-4 text-xs text-slate-300 overflow-auto max-h-96 whitespace-pre-wrap' }, mdContent.value)
       }
 
       return h('div', { class: `border ${borderColor.value} rounded-xl p-4 space-y-3 bg-slate-800/30` }, [
@@ -432,7 +413,7 @@ function toggleAB(agent) {
 }
 
 function clearOutput(agent) {
-  testState[agent] = { ...testState[agent], outputA: null, outputB: null, ragChunks: [], ragQueried: false, error: null }
+  testState[agent] = { ...testState[agent], artifactA: null, artifactB: null, ragChunks: [], ragQueried: false, error: null }
 }
 
 // ── Upload ────────────────────────────────────────────────────────────────────
@@ -506,15 +487,14 @@ async function runAgent(agent, slot = 'A') {
   const input = testInputs[agent]
   if (!input?.prompt) return
 
-  const loadingKey = `loading${slot}`
-  const outputKey  = `output${slot}`
-  const modelKey   = `model${slot}`
-  const model      = slot === 'A' ? input.modelA : input.modelB
+  const loadingKey  = `loading${slot}`
+  const artifactKey = `artifact${slot}`
+  const model       = slot === 'A' ? input.modelA : input.modelB
 
   testState[agent] = { ...testState[agent], [loadingKey]: true, error: null }
 
   try {
-    const res  = await fetch(`/api/rag/run/${agent}`, {
+    const res = await fetch(`/api/rag/run/${agent}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -525,14 +505,26 @@ async function runAgent(agent, slot = 'A') {
         model,
       }),
     })
+
+    // Verificar que la respuesta sea JSON antes de parsear
+    const contentType = res.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      const text = await res.text()
+      throw new Error(`El servidor devolvió un error inesperado (${res.status}). Intenta con un prompt más corto o revisa los logs.`)
+    }
+
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail)
+
     testState[agent] = {
       ...testState[agent],
-      [outputKey]:  data.output,
-      [modelKey]:   data.model,
-      ragUsed:      data.rag_used,
-      ragChars:     data.rag_chars,
+      [artifactKey]: {
+        url:      data.artifact_url,
+        type:     data.artifact_type,
+        model:    data.model,
+        ragUsed:  data.rag_used,
+        ragChars: data.rag_chars,
+      },
       [loadingKey]: false,
     }
   } catch (e) {

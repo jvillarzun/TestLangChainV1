@@ -132,9 +132,41 @@ def test_query(agent: str, body: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _detect_artifact(text: str) -> tuple[str, str]:
+    """
+    Detecta si el output contiene HTML y lo extrae.
+    Retorna (artifact_type, clean_content).
+    artifact_type: 'html' | 'md'
+    """
+    import re
+    # HTML en bloque de código
+    match = re.search(r"```html\n?([\s\S]*?)```", text)
+    if match:
+        return "html", match.group(1).strip()
+    # HTML suelto
+    if "<!DOCTYPE html" in text or "<html" in text:
+        return "html", text.strip()
+    return "md", text.strip()
+
+
+def _save_artifact(agent: str, content: str, ext: str) -> str:
+    """Guarda el artefacto en outputs/ y retorna la URL relativa."""
+    import uuid
+    from pathlib import Path
+    outputs = Path(__file__).parent.parent / "outputs"
+    outputs.mkdir(exist_ok=True)
+    filename = f"rag_{agent}_{uuid.uuid4().hex[:8]}.{ext}"
+    (outputs / filename).write_text(content, encoding="utf-8")
+    return f"/deliverables/{filename}"
+
+
 @router.post("/run/{agent}")
 def test_run_agent(agent: str, body: RunRequest):
-    """Ejecuta el agente con prompt + RAG opcional. Soporta model override para A/B."""
+    """
+    Ejecuta el agente con prompt + RAG opcional.
+    Guarda el output como archivo y devuelve la URL — evita JSON gigante
+    y permite previsualizar HTML directo desde la URL.
+    """
     if agent not in _VALID_AGENTS:
         raise HTTPException(status_code=400, detail=f"Agent '{agent}' not valid")
     try:
@@ -143,10 +175,9 @@ def test_run_agent(agent: str, body: RunRequest):
 
         model = body.model or DEFAULT_MODEL
 
-        # Validar que el model sea uno de los permitidos
         valid_ids = {m["id"] for m in GROQ_MODELS}
         if model not in valid_ids:
-            raise HTTPException(status_code=400, detail=f"Model '{model}' not valid. Use: {sorted(valid_ids)}")
+            raise HTTPException(status_code=400, detail=f"Model '{model}' not valid.")
 
         try:
             system_prompt = load_prompt(
@@ -160,6 +191,9 @@ def test_run_agent(agent: str, body: RunRequest):
                 dev_content="[test — no disponible]",
                 qa_content="[test — no disponible]",
                 infra_content="[test — no disponible]",
+                github_plan="",
+                repo_be_name="",
+                repo_fe_name="",
                 feedback="Sin feedback previo.",
             )
         except Exception:
@@ -178,12 +212,17 @@ def test_run_agent(agent: str, body: RunRequest):
             stub_content=f"[TEST_MODE] stub — agente {agent} · modelo {model}",
         )
 
+        artifact_type, clean = _detect_artifact(output)
+        ext = "html" if artifact_type == "html" else "md"
+        artifact_url = _save_artifact(agent, clean, ext)
+
         return {
-            "agent":     agent,
-            "output":    output,
-            "rag_used":  rag_chars > 0,
-            "rag_chars": rag_chars,
-            "model":     model,
+            "agent":         agent,
+            "artifact_url":  artifact_url,
+            "artifact_type": artifact_type,
+            "rag_used":      rag_chars > 0,
+            "rag_chars":     rag_chars,
+            "model":         model,
         }
     except HTTPException:
         raise
