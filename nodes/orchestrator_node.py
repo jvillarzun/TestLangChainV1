@@ -231,47 +231,156 @@ def orchestrator_finalize_node(state: CycleState) -> dict:
     Nodo final — se ejecuta cuando todas las fases están aprobadas.
 
     Acciones:
-    1. Cierra el Epic en Jira
-    2. Notifica al equipo que el ciclo está completo
-    3. Genera el resumen final
+    1. Genera REPORT.md consolidado con todos los entregables
+    2. Cierra el Epic en Jira
+    3. Notifica al equipo con link al reporte
     """
     print(f"\n{'='*60}")
     print(f"🏁 CICLO COMPLETO — {state['challenge_name']}")
     print(f"{'='*60}\n")
 
-    # Contar decisiones y tiempo total
     decisions = state["hitl_decisions"]
-    approvals = sum(1 for d in decisions if d["decision"] == "approve")
+    approvals  = sum(1 for d in decisions if d["decision"] == "approve")
     rejections = sum(1 for d in decisions if d["decision"] == "reject")
 
-    start = state.get("cycle_start_time")
-    duration = ""
+    start    = state.get("cycle_start_time")
+    end_time = datetime.now()
+    duration_str = ""
     if start:
-        from datetime import datetime as dt
-        elapsed = dt.now() - dt.fromisoformat(start)
-        minutes = int(elapsed.total_seconds() / 60)
-        duration = f"Duración: {minutes} minutos\n"
+        elapsed      = end_time - datetime.fromisoformat(start)
+        minutes      = int(elapsed.total_seconds() / 60)
+        duration_str = f"{minutes} min"
+
+    report_content = _build_report(state, approvals, rejections, duration_str)
+
+    from nodes.helper import save_output
+    report_path = save_output("REPORT.md", report_content)
+    print(f"📄 Reporte consolidado guardado en {report_path}")
 
     summary = (
-        f"✅ 7/7 entregables completados\n"
-        f"{duration}"
-        f"Checkpoints HITL: {approvals} aprobados, {rejections} rechazados\n"
-        f"Epic Jira: {state.get('jira_epic_key', 'N/A')}\n"
-        f"PR GitHub: {state.get('dev_pr_url', 'N/A')}"
+        f"✅ 7/7 entregables completados · "
+        f"{duration_str or 'N/A'} · "
+        f"{approvals} aprobados / {rejections} rechazados\n"
+        f"Epic Jira: {state.get('jira_epic_key', 'N/A')}"
     )
 
-    # Cerrar Epic en Jira
     if state.get("jira_epic_key"):
         close_epic(state["jira_epic_key"], summary)
         print(f"✅ Epic {state['jira_epic_key']} cerrado en Jira")
 
-    # Notificación final al equipo
+    from config.settings import WEBHOOK_BASE_URL
+    report_url = f"{WEBHOOK_BASE_URL}/view/REPORT.md"
     notify_team(
-        message=f"🏁 *Ciclo ADLC completado* — `{state['challenge_name']}`\n\n{summary}",
+        message=(
+            f"🏁 *Ciclo ADLC completado* — `{state['challenge_name']}`\n\n"
+            f"{summary}\n\n"
+            f"📋 <{report_url}|Ver reporte consolidado>"
+        ),
         thread_id=state["thread_id"],
     )
 
     return {
-        "current_phase":    "done",
-        "cycle_end_time":   datetime.now().isoformat(),
+        "current_phase":  "done",
+        "cycle_end_time": end_time.isoformat(),
     }
+
+
+def _build_report(state: CycleState, approvals: int, rejections: int, duration: str) -> str:
+    """Genera el contenido de REPORT.md consolidando todos los entregables."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    deliverables = [
+        ("PRD",   "PRDSPECS.md",   state.get("prd_content")),
+        ("UX",    "UXSPECS.md",    state.get("ux_content")),
+        ("ARQ",   "ARQSPECS.md",   state.get("arch_content")),
+        ("DEV",   "DEVSPECS.md",   state.get("dev_content")),
+        ("QA",    "QASCPECS.md",   state.get("qa_content")),
+        ("INFRA", "INFESPEOS.md",  state.get("infra_content")),
+        ("SEC",   "DEVSECOPS.md",  state.get("security_content")),
+    ]
+
+    completed = sum(1 for _, _, c in deliverables if c)
+
+    lines: list[str] = []
+
+    # ── Encabezado ──────────────────────────────────────────────────────────────
+    lines += [
+        f"# Reporte Consolidado ADLC — {state['challenge_name']}",
+        "",
+        f"> Generado: {now}  ",
+        f"> Tipo: {state['challenge_type'].upper()}  ",
+        f"> Thread ID: `{state['thread_id']}`",
+        "",
+        "---",
+        "",
+        "## Resumen Ejecutivo",
+        "",
+        f"| Métrica | Valor |",
+        f"|---------|-------|",
+        f"| Entregables completados | {completed}/7 |",
+        f"| Duración total | {duration or 'N/A'} |",
+        f"| Checkpoints HITL aprobados | {approvals} |",
+        f"| Rechazos/retrabajos | {rejections} |",
+        f"| QA pasó | {'✅ Sí' if state.get('qa_passed') else '❌ No'} |",
+        f"| Epic Jira | {state.get('jira_epic_key') or 'N/A'} |",
+        f"| PR GitHub | {state.get('dev_pr_url') or 'N/A'} |",
+        "",
+        "### Descripción del challenge",
+        "",
+        state.get("challenge_description", ""),
+        "",
+    ]
+
+    if state.get("challenge_success_criteria"):
+        lines += ["### Criterios de éxito", ""]
+        for c in state["challenge_success_criteria"]:
+            lines.append(f"- {c}")
+        lines.append("")
+
+    # ── Tabla de entregables ─────────────────────────────────────────────────
+    lines += [
+        "---",
+        "",
+        "## Entregables",
+        "",
+        "| Fase | Archivo | Estado |",
+        "|------|---------|--------|",
+    ]
+    for label, filename, content in deliverables:
+        status = "✅ Completado" if content else "⏳ Pendiente"
+        lines.append(f"| {label} | `{filename}` | {status} |")
+    lines.append("")
+
+    # ── Contenido por fase ───────────────────────────────────────────────────
+    lines += ["---", ""]
+    for label, filename, content in deliverables:
+        lines += [f"## {label} — {filename}", ""]
+        if content:
+            lines.append(content)
+        else:
+            lines.append("_Entregable no generado._")
+        lines += ["", "---", ""]
+
+    # ── Historial HITL ───────────────────────────────────────────────────────
+    lines += ["## Historial de decisiones HITL", ""]
+    decisions = state.get("hitl_decisions", [])
+    if decisions:
+        lines += [
+            "| # | Fase | Decisión | Reviewer | Feedback | Timestamp |",
+            "|---|------|----------|----------|----------|-----------|",
+        ]
+        for i, d in enumerate(decisions, 1):
+            icon     = {"approve": "✅", "reject": "🔄", "backtrack": "⏪"}.get(d.get("decision", ""), "?")
+            feedback = (d.get("feedback") or "—").replace("|", "∣")[:60]
+            ts       = (d.get("timestamp") or "")[:16]
+            lines.append(
+                f"| {i} | {d.get('phase','?')} | {icon} {d.get('decision','?')} "
+                f"| {d.get('reviewer','?')} | {feedback} | {ts} |"
+            )
+        lines.append("")
+    else:
+        lines += ["_Sin decisiones registradas._", ""]
+
+    lines += ["---", "", "_Reporte generado automáticamente por MACH-ORCHESTRATOR._"]
+
+    return "\n".join(lines)

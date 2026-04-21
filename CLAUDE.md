@@ -31,18 +31,33 @@ Verificar instaladas: `/find-skills` en Claude Code.
 state/cycle_state.py          → CycleState (TypedDict compartido entre todos los nodos)
 graph/mach_graph.py           → StateGraph: build_graph(), get_graph_config()
 nodes/orchestrator_node.py    → init, route, finalize
-nodes/hitl_node.py            → make_hitl_node(phase) — usa interrupt() de LangGraph
+nodes/hitl_node.py            → make_hitl_notify_node(phase) + make_hitl_node(phase)
 nodes/helper.py               → load_prompt(), save_output(), create_llm(), llm_invoke()
 nodes/<agente>/<agente>_node.py  → 7 nodos LLM reales (Groq)
 nodes/<agente>/<agente>_prompt.md → prompts editables sin tocar Python
 outputs/                      → entregables generados: PRDSPECS.md, ARQSPECS.md, etc.
 tools/slack_tools.py          → notify_team(), notify_reviewer(), update_hitl_msg()
 tools/jira_tools.py           → create_epic/story/task(), update_issue_status()
-api/slack_webhook.py          → POST /slack/interactive + /deliverables/ (static files)
+api/slack_webhook.py          → POST /slack/interactive + /view/{filename} + /deliverables/
 dashboard/app.py              → Streamlit dashboard en tiempo real
+dashboard/components/         → componentes UI separados por sección
 config/settings.py            → todas las env vars (no hardcodear credenciales)
 main.py                       → run_cycle(challenge) — punto de entrada
+docs/diagrama_adlc.md         → tabla humano/agente por fase + diagrama Mermaid
+docs/grafo_langgraph.png      → grafo real exportado desde LangGraph
+docs/export_graph.py          → regenera grafo_langgraph.png si cambia el grafo
 ```
+
+## Flujo secuencial ADLC
+
+```
+PRD → UX → ARQ → DEV → QA → INFRA → SEC → DONE
+```
+Cada fase: `run_{fase}` → `hitl_notify_{fase}` (DM Slack) → `hitl_{fase}` (interrupt)
+- **Approve** → `current_phase` avanza → conditional edge → siguiente agente
+- **Reject + feedback** → `current_phase` se mantiene → conditional edge → mismo agente
+
+Ver diagrama completo: `docs/diagrama_adlc.md` · Grafo visual: `docs/grafo_langgraph.png`
 
 ## Convenciones de código
 
@@ -123,9 +138,9 @@ Para testing sin tokens: `TEST_MODE=true`
 
 ## Fases y dependencias
 ```
-PRD → (UX ∥ ARQ) → DEV → QA → (INFRA ∥ SEC) → DONE
+PRD → UX → ARQ → DEV → QA → INFRA → SEC → DONE
 ```
-Cada flecha tiene un checkpoint HITL. Si se rechaza, el agente re-corre con
+Cada flecha tiene un checkpoint HITL individual. Si se rechaza, el agente re-corre con
 `hitl_decisions[-1]["feedback"]` inyectado en su prompt.
 
 ## No hacer
