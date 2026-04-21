@@ -17,7 +17,7 @@ def render_deliverables(state: dict) -> None:
         if content:
             with st.expander(f"{label} ✅", expanded=False):
                 st.markdown(content)
-                if file_path.exists():
+                if file_path.exists() and file_path.stat().st_size > 0:
                     with open(file_path, "rb") as f:
                         st.download_button(
                             label=f"⬇️ Descargar {filename}",

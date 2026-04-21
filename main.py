@@ -10,8 +10,8 @@ Uso:
     # Arrancar el servidor de webhooks de Slack (en otra terminal)
     uvicorn api.slack_webhook:app --reload --port 8000
 
-    # En desarrollo, exponer el webhook con ngrok:
-    ngrok http 8000
+    # En desarrollo, exponer el webhook con Cloudflare Tunnel:
+    cloudflared tunnel --url http://localhost:8000
     → Copiar URL en Slack App > Interactivity > Request URL
 
 Flujo:
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     if mode == "webhook":
         # Solo el servidor de webhooks
         print(f"🌐 Iniciando webhook server en puerto 8000...")
-        print(f"   Exponer con: ngrok http 8000")
+        print(f"   Exponer con: cloudflared tunnel --url http://localhost:8000")
         run_webhook_server()
 
     elif mode == "both":

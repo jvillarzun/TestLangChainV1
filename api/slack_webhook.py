@@ -17,8 +17,8 @@ Para correrlo en desarrollo:
   uvicorn api.slack_webhook:app --reload --port 8000
 
 Para exponerlo a Slack:
-  ngrok http 8000
-  → Copiar la URL de ngrok en la Slack App > Interactivity > Request URL
+  cloudflared tunnel --url http://localhost:8000
+  → Copiar la URL en la Slack App > Interactivity > Request URL
 """
 
 import json
@@ -26,9 +26,10 @@ import hashlib
 import hmac
 import time
 from typing import Any
+from pathlib import Path as _Path
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.types import Command
 
@@ -39,10 +40,10 @@ from config.settings import SLACK_SIGNING_SECRET
 
 app = FastAPI(title="MACH Race — Slack HITL Webhook")
 
-# Servir outputs/ en /deliverables — los .md generados son accesibles por URL
-from pathlib import Path as _Path
 _outputs_dir = _Path(__file__).parent.parent / "outputs"
 _outputs_dir.mkdir(exist_ok=True)
+
+# Raw files en /deliverables (para descargas)
 app.mount("/deliverables", StaticFiles(directory=str(_outputs_dir)), name="deliverables")
 
 # Grafo compartido — singleton (el checkpointer guarda el estado por thread_id)
@@ -90,6 +91,60 @@ async def slack_interactive(request: Request, background_tasks: BackgroundTasks)
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "MACH Race Slack Webhook"}
+
+
+@app.get("/view/{filename}", response_class=HTMLResponse)
+async def view_deliverable(filename: str):
+    """Renderiza un .md de outputs/ como HTML con sintaxis resaltada."""
+    if not filename.endswith(".md") or "/" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Archivo inválido")
+
+    file_path = _outputs_dir / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"{filename} aún no generado")
+
+    content = file_path.read_text(encoding="utf-8")
+
+    try:
+        import markdown
+        body_html = markdown.markdown(content, extensions=["tables", "fenced_code"])
+    except ImportError:
+        # Fallback: mostrar como <pre> si markdown no está instalado
+        body_html = f"<pre>{content}</pre>"
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{filename} — MACH Race 2026</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           max-width: 860px; margin: 40px auto; padding: 0 20px;
+           color: #1a1a2e; background: #f8f9fa; }}
+    h1, h2, h3 {{ color: #16213e; border-bottom: 1px solid #dee2e6; padding-bottom: 6px; }}
+    code {{ background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }}
+    pre {{ background: #212529; color: #f8f9fa; padding: 16px; border-radius: 8px; overflow-x: auto; }}
+    pre code {{ background: none; padding: 0; color: inherit; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
+    th, td {{ border: 1px solid #dee2e6; padding: 8px 12px; text-align: left; }}
+    th {{ background: #e9ecef; font-weight: 600; }}
+    blockquote {{ border-left: 4px solid #6c757d; margin: 0; padding: 8px 16px; color: #6c757d; }}
+    .header {{ background: #16213e; color: white; padding: 12px 20px; border-radius: 8px;
+               margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }}
+    .header a {{ color: #adb5bd; font-size: 0.85em; text-decoration: none; }}
+    .header a:hover {{ color: white; }}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span>🏁 MACH Race 2026 — {filename}</span>
+    <a href="/deliverables/{filename}" download>⬇ Descargar</a>
+  </div>
+  {body_html}
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────

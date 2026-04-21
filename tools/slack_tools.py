@@ -179,7 +179,7 @@ def notify_reviewer(
     # Link al .md generado en disco
     deliverable_filename = config.get("deliverable", "").split("+")[0].strip()
     if deliverable_filename.endswith(".md"):
-        md_url = f"{WEBHOOK_BASE_URL}/deliverables/{deliverable_filename}"
+        md_url = f"{WEBHOOK_BASE_URL}/view/{deliverable_filename}"
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"📄 *Ver documento completo:* <{md_url}|{deliverable_filename}>"}

@@ -85,8 +85,11 @@ uvicorn api.slack_webhook:app --reload --port 8000
 # Dashboard Streamlit (requiere CHECKPOINTER=sqlite en .env)
 streamlit run dashboard/app.py --server.port 8501
 
-# Exponer webhook a Slack en dev
-ngrok http 8000  # Copiar URL → Slack App > Interactivity > Request URL
+# Exponer webhook a Slack en dev — un solo comando:
+# (arranca cloudflared, captura URL, actualiza .env, levanta uvicorn)
+# Instalar cloudflared: winget install Cloudflare.cloudflared
+bash start_dev.sh
+# → Imprime la URL para pegar en Slack App > Interactivity > Request URL
 
 # Modo test (sin gastar tokens Groq)
 TEST_MODE=true python main.py

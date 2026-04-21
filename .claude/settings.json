@@ -6,7 +6,8 @@
       "Bash(streamlit:*)",
       "Bash(pytest:*)",
       "Bash(pip:*)",
-      "Bash(ngrok:*)"
+      "Bash(cloudflared:*)",
+      "Bash(bash start_dev.sh:*)"
     ]
   }
 }
