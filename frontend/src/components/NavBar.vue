@@ -32,9 +32,10 @@
 import { ref, onMounted } from 'vue'
 
 const links = [
-  { to: '/',        icon: '🏎️', label: 'Dashboard'   },
-  { to: '/new',     icon: '🚀', label: 'Nuevo Ciclo'  },
-  { to: '/prompts', icon: '✏️',  label: 'Prompts'     },
+  { to: '/',          icon: '🏎️', label: 'Dashboard'   },
+  { to: '/new',       icon: '🚀', label: 'Nuevo Ciclo'  },
+  { to: '/prompts',   icon: '✏️',  label: 'Prompts'     },
+  { to: '/knowledge', icon: '🧠', label: 'Knowledge'    },
 ]
 
 const apiOnline = ref(false)
