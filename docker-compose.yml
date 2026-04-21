@@ -22,6 +22,8 @@ services:
       - mach-data:/app/data
       # Entregables generados por los agentes
       - mach-outputs:/app/outputs
+      # Cache del modelo ONNX de ChromaDB (79MB, se descarga solo la primera vez)
+      - chroma-cache:/root/.cache/chroma
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -54,3 +56,5 @@ volumes:
   mach-data:
   # Persiste PRDSPECS.md, ARQSPECS.md, etc. entre reinicios y entre servicios
   mach-outputs:
+  # Cache del modelo ONNX de ChromaDB — evita re-descargar 79MB en cada restart
+  chroma-cache:
