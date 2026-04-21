@@ -90,7 +90,10 @@ class CycleState(TypedDict):
     """Contenido completo del DEVSPECS.md generado."""
 
     dev_pr_url: Optional[str]
-    """URL del Pull Request abierto en GitHub por el dev-agent."""
+    """URL del Pull Request principal (primer PR abierto)."""
+
+    dev_pr_urls: Annotated[list[str], operator.add]
+    """URLs de todos los Pull Requests abiertos por el dev-agent (BE + FE)."""
 
     qa_content: Optional[str]
     """Contenido completo del QASCPECS.md generado."""
@@ -103,6 +106,9 @@ class CycleState(TypedDict):
 
     security_content: Optional[str]
     """Contenido completo del DEVSECOPS.md generado."""
+
+    github_plan: Optional[str]
+    """JSON ENGINEERING_PLAN generado por el Arquitecto con pasos concretos sobre repos BE/FE."""
 
     # ──────────────────────────────────────────────────────────────────────────
     # HITL — Human-in-the-Loop control
@@ -197,10 +203,12 @@ def initial_state(
         arch_content=None,
         dev_content=None,
         dev_pr_url=None,
+        dev_pr_urls=[],
         qa_content=None,
         qa_passed=None,
         infra_content=None,
         security_content=None,
+        github_plan=None,
         # HITL
         hitl_pending_phase=None,
         hitl_decisions=[],

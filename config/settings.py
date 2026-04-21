@@ -61,3 +61,10 @@ DASHBOARD_URL    = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
 # ── Checkpointing ──────────────────────────────────────────────────────────────
 CHECKPOINTER     = os.environ.get("CHECKPOINTER", "memory")
 SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
+
+
+# ── GitHub ───────────────────────────────────────────────────────────────
+GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "")
+REPO_BE_NAME    = os.environ.get("REPO_BE_NAME", "mach-backend-test-hackathon")
+REPO_FE_NAME    = os.environ.get("REPO_FE_NAME", "mach-frontend-test-hackathon")
