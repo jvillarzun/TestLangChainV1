@@ -59,6 +59,9 @@ logs/
 # Generated outputs (runtime artifacts)
 outputs/*.md
 
+# RAG — ChromaDB binary data (generado por rag/seed.py, no commitear)
+rag_data/
+
 # pytest / coverage
 .pytest_cache/
 .coverage

@@ -39,6 +39,7 @@ from graph.mach_graph import get_graph_config
 from tools.slack_tools import _slack
 from config.settings import SLACK_SIGNING_SECRET
 from api.control import router as control_router
+from api.rag_routes import router as rag_router
 
 
 app = FastAPI(title="MACH Race — Slack HITL Webhook")
@@ -51,6 +52,13 @@ app.add_middleware(
 )
 
 app.include_router(control_router)
+app.include_router(rag_router)
+
+
+@app.on_event("startup")
+async def startup_rag_seed():
+    from rag.seed import auto_seed
+    auto_seed()
 
 _outputs_dir = _Path(__file__).parent.parent / "outputs"
 _outputs_dir.mkdir(exist_ok=True)

@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copiar package files y instalar dependencias
 COPY package*.json ./
-RUN npm ci --silent
+RUN npm install --silent
 
 # Copiar código fuente y hacer build
 COPY . .
@@ -33,6 +33,9 @@ RUN echo 'server { \
         proxy_set_header Connection "upgrade"; \
         proxy_set_header Host $host; \
         proxy_cache_bypass $http_upgrade; \
+        proxy_read_timeout 180s; \
+        proxy_connect_timeout 10s; \
+        proxy_send_timeout 180s; \
     } \
     location /deliverables { \
         proxy_pass http://mach-api:8000; \

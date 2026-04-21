@@ -117,6 +117,12 @@ def run_dev_node(state: CycleState) -> dict:
 
     github_plan = state.get("github_plan") or ""
 
+    try:
+        from rag.rag_helper import get_rag_context
+        _rag = get_rag_context("dev", f"{state['challenge_name']} {state['challenge_description']}")
+    except Exception:
+        _rag = None
+
     system_prompt = load_prompt(
         "dev",
         challenge_name=state["challenge_name"],
@@ -130,6 +136,9 @@ def run_dev_node(state: CycleState) -> dict:
         repo_fe_name=REPO_FE_NAME,
         feedback=feedback or "Sin feedback previo.",
     )
+    if _rag:
+        system_prompt += f"\n\n## Contexto de Knowledge Base (DEV):\n{_rag}"
+        print(f"   📚 RAG: {len(_rag)} chars de contexto inyectados")
 
     try:
         dev_content = llm_invoke(
