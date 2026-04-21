@@ -79,6 +79,42 @@ def seed(agents: list[str] | None = None, clear: bool = False) -> None:
                 print(f"  ✅ {label} → {result['chunks']} chunks")
 
 
+def auto_seed() -> None:
+    """
+    Seed automático al startup — solo corre si hay templates sin subir.
+    Idempotente: si todos los archivos ya están en ChromaDB, no hace nada.
+    """
+    try:
+        from rag.chroma_store import _get_client, AGENTS
+        client = _get_client()
+        if client is None:
+            return
+
+        has_pending = False
+        for agent in AGENTS:
+            agent_dir = TEMPLATES_DIR / agent
+            if not agent_dir.exists():
+                continue
+            col = client.get_or_create_collection(f"agent_{agent}")
+            for fpath in agent_dir.rglob("*"):
+                if fpath.suffix in SUPPORTED_EXTENSIONS:
+                    rel = str(fpath.relative_to(TEMPLATES_DIR))
+                    if not _already_uploaded(col, rel):
+                        has_pending = True
+                        break
+            if has_pending:
+                break
+
+        if has_pending:
+            print("🧠 RAG: nuevos templates detectados — ejecutando seed...")
+            seed()
+            print("✅ RAG seed completado.")
+        else:
+            print("🧠 RAG: templates ya cargados — seed omitido.")
+    except Exception as e:
+        print(f"⚠️  RAG auto-seed falló (no crítico): {e}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed RAG knowledge base from rag/templates/")
     parser.add_argument("--agent", help="Seed only this agent (e.g. dev, qa, arch)")

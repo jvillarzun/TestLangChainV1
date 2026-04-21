@@ -54,6 +54,12 @@ app.add_middleware(
 app.include_router(control_router)
 app.include_router(rag_router)
 
+
+@app.on_event("startup")
+async def startup_rag_seed():
+    from rag.seed import auto_seed
+    auto_seed()
+
 _outputs_dir = _Path(__file__).parent.parent / "outputs"
 _outputs_dir.mkdir(exist_ok=True)
 
