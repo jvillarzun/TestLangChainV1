@@ -36,19 +36,26 @@ PHASE_HITL_CONFIG = {
         "label":         "PRD listo para revisión",
         "deliverable":   "PRDSPECS.md",
         "emoji":         "📋",
-        "instructions":  "Verificar que las User Stories cubren el challenge y que los criterios de aceptación son medibles.",
+        "instructions":  "Verificar que las User Stories cubren el challenge y los criterios de aceptación son medibles.",
     },
-    "ux_arch": {
+    "ux": {
+        "reviewer_role": "po",
+        "label":         "UX Specs listo para revisión",
+        "deliverable":   "UXSPECS.md",
+        "emoji":         "🎨",
+        "instructions":  "Verificar que los flujos de usuario cubren las User Stories del PRD y la experiencia es coherente.",
+    },
+    "arch": {
         "reviewer_role": "architect",
         "label":         "Arquitectura lista para revisión",
-        "deliverable":   "ARQSPECS.md + UXSPECS.md",
+        "deliverable":   "ARQSPECS.md",
         "emoji":         "🏗️",
         "instructions":  "Verificar que la arquitectura es viable en AWS y que la latencia p95 es alcanzable.",
     },
     "dev": {
         "reviewer_role": "dev_lead",
         "label":         "PR listo para code review",
-        "deliverable":   "DEVSPECS.md + PR en GitHub",
+        "deliverable":   "DEVSPECS.md",
         "emoji":         "💻",
         "instructions":  "Revisar el PR en GitHub. Verificar que el código compila y los tests pasan.",
     },
@@ -59,12 +66,19 @@ PHASE_HITL_CONFIG = {
         "emoji":         "🧪",
         "instructions":  "Revisar que los 3 criterios críticos están PASS. Si hay blockers, rechazar con feedback.",
     },
-    "infra_sec": {
+    "infra": {
         "reviewer_role": "devops",
-        "label":         "Deploy en staging — verificar métricas",
-        "deliverable":   "INFESPEOS.md + DEVSECOPS.md + deploy AWS",
+        "label":         "Infra lista para revisión",
+        "deliverable":   "INFESPEOS.md",
         "emoji":         "⚙️",
-        "instructions":  "Verificar que el endpoint responde en <200ms p95 en Grafana. Revisar el DEVSECOPS por findings críticos.",
+        "instructions":  "Verificar que el CDK stack es correcto y el pipeline CI/CD cubre los ambientes requeridos.",
+    },
+    "sec": {
+        "reviewer_role": "devops",
+        "label":         "Security audit listo para revisión",
+        "deliverable":   "DEVSECOPS.md",
+        "emoji":         "🔐",
+        "instructions":  "Revisar findings críticos. Verificar que no hay credenciales expuestas ni vulnerabilidades OWASP Top 10.",
     },
 }
 
@@ -104,12 +118,13 @@ def notify_reviewer(
     thread_id: str,
     deliverable_content: str | None = None,
     extra_context: str | None = None,
-) -> str | None:
+) -> tuple[str | None, str | None]:
     """
     Envía un DM al revisor de la fase con botones Aprobar/Rechazar.
 
-    Retorna el `ts` (timestamp) del mensaje de Slack, que se guarda en el
-    estado para poder actualizar el mensaje después de la decisión.
+    Retorna (ts, channel) del mensaje enviado.
+    ts: para actualizar el mensaje después de la decisión.
+    channel: ID real del canal DM (D0XXX) — necesario para chat_update.
 
     El `value` de cada botón es un JSON con:
       - thread_id: para que el webhook sepa qué ciclo reanudar
@@ -237,10 +252,11 @@ def notify_reviewer(
             text=f"MACH Race: {config['label']} — requiere tu revisión",
             blocks=blocks,
         )
-        return response["ts"]
+        # channel real del DM (D0XXX) — distinto del user ID (U0XXX)
+        return response["ts"], response["channel"]
     except SlackApiError as e:
         print(f"[Slack] Error al enviar DM: {e.response['error']}")
-        return None
+        return None, None
 
 
 def update_hitl_message(

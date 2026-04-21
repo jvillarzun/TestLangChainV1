@@ -32,7 +32,7 @@ def run_infra_node(state: CycleState) -> dict:
     except Exception as e:
         print(f"[INFRA-AGENT] Error: {e}")
         notify_team(f"❌ INFRA-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "infra_sec", "error_message": str(e), "infra_content": None}
+        return {"error_phase": "infra", "error_message": str(e), "infra_content": None}
 
     output_path = save_output("INFESPEOS.md", infra_content)
     print(f"   💾 Guardado en {output_path}")

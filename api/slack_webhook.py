@@ -261,8 +261,8 @@ async def _open_feedback_modal(
         view={
             "type":             "modal",
             "callback_id":      "hitl_feedback_modal",
-            "title":            {"type": "plain_text", "text": "Instrucciones para rehacer"},
-            "submit":           {"type": "plain_text", "text": "Rehacer con este feedback"},
+            "title":            {"type": "plain_text", "text": "Feedback de rechazo"},
+            "submit":           {"type": "plain_text", "text": "Rehacer con feedback"},
             "close":            {"type": "plain_text", "text": "Cancelar"},
             "private_metadata": json.dumps({
                 "thread_id":  thread_id,

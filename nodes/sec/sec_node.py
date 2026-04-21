@@ -9,7 +9,7 @@ def run_security_node(state: CycleState) -> dict:
     """Nodo SEC — Gemini audita arquitectura e implementación, genera DEVSECOPS.md."""
     print("\n🔐 SECURITY-AGENT: Auditando...")
 
-    feedback = _get_last_feedback(state, "security")
+    feedback = _get_last_feedback(state, "sec")
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
 
@@ -32,7 +32,7 @@ def run_security_node(state: CycleState) -> dict:
     except Exception as e:
         print(f"[SEC-AGENT] Error: {e}")
         notify_team(f"❌ SECURITY-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "infra_sec", "error_message": str(e), "security_content": None}
+        return {"error_phase": "sec", "error_message": str(e), "security_content": None}
 
     output_path = save_output("DEVSECOPS.md", security_content)
     print(f"   💾 Guardado en {output_path}")

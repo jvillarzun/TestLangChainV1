@@ -1,13 +1,15 @@
-PHASES = ["init", "prd", "ux_arch", "dev", "qa", "infra_sec", "done"]
+PHASES = ["init", "prd", "ux", "arch", "dev", "qa", "infra", "sec", "done"]
 
 PHASE_LABELS = {
-    "init":      "🚀 Init",
-    "prd":       "📋 PRD",
-    "ux_arch":   "🎨 UX + ARQ",
-    "dev":       "💻 DEV",
-    "qa":        "🧪 QA",
-    "infra_sec": "⚙️ INFRA + SEC",
-    "done":      "✅ Done",
+    "init":  "🚀 Init",
+    "prd":   "📋 PRD",
+    "ux":    "🎨 UX",
+    "arch":  "🏗️ ARQ",
+    "dev":   "💻 DEV",
+    "qa":    "🧪 QA",
+    "infra": "⚙️ INFRA",
+    "sec":   "🔐 SEC",
+    "done":  "✅ Done",
 }
 
 DELIVERABLES = [

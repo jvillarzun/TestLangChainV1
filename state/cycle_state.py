@@ -26,10 +26,12 @@ import operator
 PhaseName = Literal[
     "init",
     "prd",
-    "ux_arch",
+    "ux",
+    "arch",
     "dev",
     "qa",
-    "infra_sec",
+    "infra",
+    "sec",
     "done",
 ]
 
@@ -126,11 +128,10 @@ class CycleState(TypedDict):
     """
 
     hitl_slack_ts: Optional[str]
-    """
-    Timestamp del mensaje de Slack enviado para HITL.
-    Se usa para actualizar el mensaje cuando el humano aprueba/rechaza
-    (reemplaza los botones con un indicador de decisión).
-    """
+    """Timestamp del mensaje de Slack enviado para HITL."""
+
+    hitl_slack_channel: Optional[str]
+    """Canal DM real (D0XXX) donde se envió el mensaje HITL. Necesario para chat_update."""
 
     # ──────────────────────────────────────────────────────────────────────────
     # JIRA — tracking de tickets
@@ -204,6 +205,7 @@ def initial_state(
         hitl_pending_phase=None,
         hitl_decisions=[],
         hitl_slack_ts=None,
+        hitl_slack_channel=None,
         # Jira
         jira_epic_key=None,
         jira_story_keys=[],

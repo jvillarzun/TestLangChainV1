@@ -32,7 +32,7 @@ def run_arch_node(state: CycleState) -> dict:
     except Exception as e:
         print(f"[ARCH-AGENT] Error: {e}")
         notify_team(f"❌ ARCHITECT-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "ux_arch", "error_message": str(e), "arch_content": None}
+        return {"error_phase": "arch", "error_message": str(e), "arch_content": None}
 
     output_path = save_output("ARQSPECS.md", arch_content)
     print(f"   💾 Guardado en {output_path}")

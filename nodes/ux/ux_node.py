@@ -32,7 +32,7 @@ def run_ux_node(state: CycleState) -> dict:
     except Exception as e:
         print(f"[UX-AGENT] Error: {e}")
         notify_team(f"❌ UX-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "ux_arch", "error_message": str(e), "ux_content": None}
+        return {"error_phase": "ux", "error_message": str(e), "ux_content": None}
 
     output_path = save_output("UXSPECS.md", ux_content)
     print(f"   💾 Guardado en {output_path}")
