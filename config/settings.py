@@ -65,3 +65,9 @@ SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
 # ── Feature flags ─────────────────────────────────────────────────────────────
 # SHOW_MANUAL_CONTROLS=true → muestra botones Aprobar/Rechazar en el dashboard
 SHOW_MANUAL_CONTROLS: bool = os.getenv("SHOW_MANUAL_CONTROLS", "false").lower() == "true"
+
+# ── GitHub ───────────────────────────────────────────────────────────────
+GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "")
+REPO_BE_NAME    = os.environ.get("REPO_BE_NAME", "mach-backend-test-hackathon")
+REPO_FE_NAME    = os.environ.get("REPO_FE_NAME", "mach-frontend-test-hackathon")

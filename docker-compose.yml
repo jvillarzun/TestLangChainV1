@@ -45,7 +45,12 @@ services:
       # Dashboard calls mach-api using Docker's internal DNS
       WEBHOOK_BASE_URL: http://mach-api:8000
       STREAMLIT_SERVER_FILE_WATCHER_TYPE: poll
+      TEST_MODE: ${TEST_MODE}
       SHOW_MANUAL_CONTROLS: ${SHOW_MANUAL_CONTROLS:-false}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_USERNAME: ${GITHUB_USERNAME}
+      REPO_BE_NAME: ${REPO_BE_NAME}
+      REPO_FE_NAME: ${REPO_FE_NAME}
     ports:
       - "8501:8501"
     volumes:

@@ -28,3 +28,14 @@ def render_deliverables(state: dict) -> None:
                         )
         else:
             st.caption(f"⏳ {label} — pendiente")
+
+    # ── Pull Requests abiertos por el Dev Agent ───────────────────────────────
+    pr_urls: list[str] = state.get("dev_pr_urls") or []
+    if state.get("dev_pr_url") and not pr_urls:
+        pr_urls = [state["dev_pr_url"]]
+    if pr_urls:
+        st.divider()
+        st.subheader("🔗 Pull Requests")
+        for url in pr_urls:
+            repo_label = "Backend" if "backend" in url.lower() else "Frontend" if "frontend" in url.lower() else "Repo"
+            st.markdown(f"- [{repo_label} PR]({url})")
