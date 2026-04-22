@@ -212,6 +212,22 @@ def test_run_agent(agent: str, body: RunRequest):
             system_prompt += f"\n\n## Knowledge Base ({agent.upper()}):\n{rag_context}"
             rag_chars = len(rag_context)
 
+        # Templates completos — inyectar ANTES del RAG chunkeado
+        try:
+            from rag.template_matcher import get_template_context
+            tpl_context = get_template_context(agent, body.prompt)
+            if tpl_context:
+                system_prompt += (
+                    f"\n\n## 📐 Templates de referencia (USAR COMO BASE)\n"
+                    f"Los siguientes templates son archivos REALES del proyecto. "
+                    f"DEBES usarlos como base y adaptarlos al pedido del usuario. "
+                    f"Mantén la estructura, estilos y patrones del template.\n\n"
+                    f"{tpl_context}"
+                )
+                rag_chars += len(tpl_context)
+        except Exception:
+            pass
+
         output, _usage = llm_invoke(
             model=model,
             system_prompt=system_prompt,
@@ -283,6 +299,20 @@ def iterate_artifact(agent: str, body: IterateRequest):
         )
         if rag_context:
             system_prompt += f"\n\n## Knowledge Base ({agent.upper()}):\n{rag_context}"
+
+        # Templates completos como referencia
+        try:
+            from rag.template_matcher import get_template_context
+            tpl_context = get_template_context(agent, body.feedback)
+            if tpl_context:
+                system_prompt += (
+                    f"\n\n## 📐 Templates de referencia\n"
+                    f"Usa estos templates como guía de estructura y estilos:\n\n"
+                    f"{tpl_context}"
+                )
+                rag_chars += len(tpl_context)
+        except Exception:
+            pass
 
         output, _usage = llm_invoke(
             model=model,

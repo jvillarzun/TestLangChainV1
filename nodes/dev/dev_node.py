@@ -141,6 +141,23 @@ def run_dev_node(state: CycleState) -> dict:
         system_prompt += f"\n\n## Contexto de Knowledge Base (DEV):\n{_rag}"
         print(f"   📚 RAG: {len(_rag)} chars de contexto inyectados")
 
+    # Templates completos — inyectar como base para UI/código
+    try:
+        from rag.template_matcher import get_template_context
+        _tpl_query = f"{state['challenge_name']} {state['challenge_description']}"
+        _tpl = get_template_context("dev", _tpl_query)
+        if _tpl:
+            system_prompt += (
+                f"\n\n## 📐 Templates de referencia (USAR COMO BASE)\n"
+                f"Los siguientes templates son archivos REALES del proyecto. "
+                f"DEBES usarlos como base y adaptarlos. "
+                f"Mantén la estructura, estilos y patrones del template.\n\n"
+                f"{_tpl}"
+            )
+            print(f"   📐 Templates: {len(_tpl)} chars inyectados como base")
+    except Exception:
+        pass
+
     try:
         dev_content, _usage = llm_invoke(
             model=MODEL_DEV,
