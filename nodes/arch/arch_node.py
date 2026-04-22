@@ -48,6 +48,13 @@ def run_arch_node(state: CycleState) -> dict:
     fe_context = _format_context(fe_ctx)
     print(f"   ✔ BE: {len(be_ctx['tree'])} archivos | FE: {len(fe_ctx['tree'])} archivos")
 
+    try:
+        from rag.rag_helper import get_rag_context
+        _rag_query = get_phase_instructions(state, "arch") or f"{state['challenge_name']} {state['challenge_description']}"
+        _rag = get_rag_context("arch", _rag_query)
+    except Exception:
+        _rag = None
+
     system_prompt = load_prompt(
         "arch",
         challenge_name=state["challenge_name"],
@@ -61,6 +68,9 @@ def run_arch_node(state: CycleState) -> dict:
         repo_fe_name=REPO_FE_NAME,
         orchestrator_instructions=get_phase_instructions(state, "arch") or "Sin instrucciones adicionales.",
     )
+    if _rag:
+        system_prompt += f"\n\n## Contexto de Knowledge Base (ARCH):\n{_rag}"
+        print(f"   📚 RAG: {len(_rag)} chars de contexto inyectados")
 
     try:
         arch_content = llm_invoke(

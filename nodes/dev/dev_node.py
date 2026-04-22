@@ -119,7 +119,8 @@ def run_dev_node(state: CycleState) -> dict:
 
     try:
         from rag.rag_helper import get_rag_context
-        _rag = get_rag_context("dev", f"{state['challenge_name']} {state['challenge_description']}")
+        _rag_query = get_phase_instructions(state, "dev") or f"{state['challenge_name']} {state['challenge_description']}"
+        _rag = get_rag_context("dev", _rag_query)
     except Exception:
         _rag = None
 
