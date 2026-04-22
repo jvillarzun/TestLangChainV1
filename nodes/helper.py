@@ -33,7 +33,14 @@ def load_prompt(agent: str, **kwargs) -> str:
     class _Safe(dict):
         def __missing__(self, key: str) -> str:
             return "{" + key + "}"
-    return template.format_map(_Safe(kwargs))
+    try:
+        return template.format_map(_Safe(kwargs))
+    except (KeyError, ValueError) as e:
+        # Si falla el format, puede ser que kwargs contenga código con llaves no escapadas
+        print(f"⚠️  [load_prompt] Error formateando prompt de '{agent}': {e}")
+        print(f"   Hint: Verifica que el contenido de kwargs no tenga {{}} sin escapar")
+        print(f"   Keys: {list(kwargs.keys())}")
+        raise
 
 
 def create_llm(model: str) -> Any:
