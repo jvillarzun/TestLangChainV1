@@ -3,49 +3,48 @@ import re
 
 from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
+from nodes.dev.dev_validator import validate_dev_output, parse_file_blocks
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from tools.github_tools import create_branch_and_push, open_pull_request
 from config.settings import MODEL_DEV, REPO_BE_NAME, REPO_FE_NAME
 
+
 def _parse_generated_files(content: str) -> list[dict]:
     """
-    Extrae el bloque JSON GENERATED_FILES del output del LLM.
-    Retorna lista de dicts: [{"repo": ..., "path": ..., "content": ...}]
+    Extrae archivos del output del LLM.
+    Soporta dos formatos:
+      1. Nuevo (preferido): bloques ## FILE: repo/path
+      2. Legacy: bloque ```json { "files": [...] }```
     """
-    print(f"\n🔍 [DEV Parser] Buscando bloque GENERATED_FILES en respuesta LLM...")
+    print(f"\n🔍 [DEV Parser] Buscando archivos en respuesta LLM...")
     print(f"   Longitud del contenido: {len(content)} chars")
-    
+
+    # ── Formato nuevo: ## FILE: repo/path ────────────────────────────────────
+    files = parse_file_blocks(content)
+    if files:
+        print(f"✅ [DEV Parser] Formato ## FILE: — {len(files)} archivo(s) encontrado(s)")
+        for i, f in enumerate(files, 1):
+            print(f"   {i}. Repo: {f['repo']}, Path: {f['path']}, Content: {len(f['content'])} chars")
+        return files
+
+    # ── Formato legacy: bloque JSON ───────────────────────────────────────────
+    print(f"⚠️  [DEV Parser] Formato ## FILE: no encontrado — intentando JSON legacy...")
     match = re.search(r"```json\s*(\{.*?\"files\".*?\})\s*```", content, re.DOTALL)
     if not match:
-        print(f"❌ [DEV Parser] NO se encontró bloque ```json con 'files'")
-        # Intentar buscar cualquier bloque JSON
-        alt_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
-        if alt_match:
-            print(f"⚠️  [DEV Parser] Se encontró un bloque JSON pero sin clave 'files'")
-            print(f"   Primeros 200 chars: {alt_match.group(1)[:200]}")
-        else:
-            print(f"❌ [DEV Parser] NO se encontró ningún bloque ```json")
+        print(f"❌ [DEV Parser] NO se encontró ningún formato válido de archivos")
         return []
-    
-    print(f"✅ [DEV Parser] Bloque JSON encontrado")
+
     json_str = match.group(1)
-    print(f"   Primeros 200 chars: {json_str[:200]}...")
-    
     try:
         data = json.loads(json_str)
         files = data.get("files", [])
-        print(f"✅ [DEV Parser] JSON parseado exitosamente")
-        print(f"   Archivos encontrados: {len(files)}")
+        print(f"✅ [DEV Parser] JSON legacy parseado — {len(files)} archivo(s)")
         for i, f in enumerate(files, 1):
-            repo = f.get("repo", "SIN REPO")
-            path = f.get("path", "SIN PATH")
-            content_len = len(f.get("content", ""))
-            print(f"   {i}. Repo: {repo}, Path: {path}, Content: {content_len} chars")
+            print(f"   {i}. Repo: {f.get('repo','?')}, Path: {f.get('path','?')}, Content: {len(f.get('content',''))} chars")
         return files
     except json.JSONDecodeError as e:
         print(f"❌ [DEV Parser] ERROR parseando JSON: {e}")
-        print(f"   JSON problemático (primeros 500 chars): {json_str[:500]}")
         return []
 
 
@@ -157,6 +156,18 @@ def run_dev_node(state: CycleState) -> dict:
 
     output_path = save_output("DEVSPECS.md", dev_content)
     print(f"   💾 Guardado en {output_path}")
+
+    # ── Validar output del LLM ────────────────────────────────────────────────
+    validation = validate_dev_output(dev_content)
+    print(f"\n🔎 [DEV Validator]\n{validation.summary()}")
+
+    if not validation.is_valid:
+        print(f"⚠️  [DEV Validator] Output con errores — se continúa pero el HITL debería rechazar")
+        notify_team(
+            f"⚠️ DEV-AGENT generó código con {len(validation.errors)} error(es) de calidad en `{state['thread_id'][:8]}`:\n"
+            + "\n".join(f"• {e}" for e in validation.errors[:5]),
+            state["thread_id"],
+        )
 
     # ── Extraer archivos generados y subir PRs ────────────────────────────────
     generated_files = _parse_generated_files(dev_content)

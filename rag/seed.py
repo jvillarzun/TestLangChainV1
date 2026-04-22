@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
-SUPPORTED_EXTENSIONS = {".md", ".txt", ".py", ".kt", ".swift", ".java", ".ts", ".js"}
+SUPPORTED_EXTENSIONS = {".md", ".txt", ".py", ".kt", ".swift", ".java", ".ts", ".js", ".html", ".css"}
 
 
 def _already_uploaded(collection, filename: str) -> bool:
