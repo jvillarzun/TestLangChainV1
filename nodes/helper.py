@@ -65,6 +65,14 @@ def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: 
     return response.content
 
 
+def get_phase_instructions(state: "CycleState", phase: str) -> str:
+    """Extrae instrucciones del orquestador para esta fase desde plan_phases."""
+    for p in state.get("plan_phases", []):
+        if p.get("phase") == phase:
+            return p.get("instructions", "")
+    return ""
+
+
 def save_output(filename: str, content: str) -> Path:
     """Guarda contenido en outputs/<filename>. Crea la carpeta si no existe."""
     _OUTPUTS_DIR.mkdir(exist_ok=True)

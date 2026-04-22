@@ -2,7 +2,7 @@ import json
 import re
 
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from tools.github_tools import create_branch_and_push, open_pull_request
@@ -119,7 +119,8 @@ def run_dev_node(state: CycleState) -> dict:
 
     try:
         from rag.rag_helper import get_rag_context
-        _rag = get_rag_context("dev", f"{state['challenge_name']} {state['challenge_description']}")
+        _rag_query = get_phase_instructions(state, "dev") or f"{state['challenge_name']} {state['challenge_description']}"
+        _rag = get_rag_context("dev", _rag_query)
     except Exception:
         _rag = None
 
@@ -135,6 +136,7 @@ def run_dev_node(state: CycleState) -> dict:
         repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
         feedback=feedback or "Sin feedback previo.",
+        orchestrator_instructions=get_phase_instructions(state, "dev") or "Sin instrucciones adicionales.",
     )
     if _rag:
         system_prompt += f"\n\n## Contexto de Knowledge Base (DEV):\n{_rag}"

@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8000',
       '/deliverables': 'http://localhost:8000',
+      '/view': 'http://localhost:8000',
     }
   }
 })

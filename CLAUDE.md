@@ -32,7 +32,7 @@ state/cycle_state.py          → CycleState (TypedDict compartido entre todos l
 graph/mach_graph.py           → StateGraph: build_graph(), get_graph_config()
 nodes/orchestrator_node.py    → init, route, finalize
 nodes/hitl_node.py            → make_hitl_notify_node(phase) + make_hitl_node(phase)
-nodes/helper.py               → load_prompt(), save_output(), create_llm(), llm_invoke()
+nodes/helper.py               → load_prompt(), save_output(), create_llm(), llm_invoke(), get_phase_instructions()
 nodes/<agente>/<agente>_node.py  → 7 nodos LLM reales (Groq)
 nodes/<agente>/<agente>_prompt.md → prompts editables sin tocar Python
 outputs/                      → entregables generados: PRDSPECS.md, ARQSPECS.md, etc.
@@ -123,11 +123,54 @@ Para testing sin tokens: `TEST_MODE=true`
 ## Modelo por agente
 | Agente | Modelo | Razón |
 |---|---|---|
+| Speckit (orchestrator_init) | `llama-3.3-70b-versatile` | Razonamiento complejo — genera plan maestro del challenge |
 | PRD, UX, ARQ, DEV, QA, INFRA, SEC | `llama-3.3-70b-versatile` | Groq free tier, sin rate limits agresivos |
-| Orchestrator | `llama-3.1-8b-instant` | Routing simple, modelo ligero y rápido |
+| Orchestrator (routing) | `llama-3.1-8b-instant` | Routing simple, modelo ligero y rápido |
 | Dev (P3) | Claude Code (subprocess) | Escribe y ejecuta código real |
 
 > Modelos en `config/settings.py`. `create_llm(model)` en `nodes/helper.py` es el único punto para cambiar proveedor.
+> Speckit usa `MODEL_SPECKIT` (env var `MODEL_SPECKIT`). Para P3 cambiar a `claude-sonnet-4-6`.
+
+## Flujo Speckit (planificación al inicio del ciclo)
+
+El orquestador usa un LLM para generar un plan maestro antes de ejecutar los agentes.
+Esto da a cada agente instrucciones específicas para el challenge en curso.
+
+```
+orchestrator_init_node
+  │
+  ├── llm_invoke(MODEL_SPECKIT, ORCHESTRATOR_SYSTEM_PROMPT, PLAN_PROMPT_TEMPLATE)
+  │     → retorna JSON con plan_phases[{phase, instructions, key_outputs, ...}]
+  │     → fallback a plan de respaldo si JSON inválido
+  │     → TEST_MODE=true usa stub_content sin llamar al LLM
+  │
+  └── plan_phases persiste en CycleState (checkpointer)
+
+Cada agente (prd, ux, arch, dev, qa, infra, sec):
+  │
+  ├── get_phase_instructions(state, "fase") → extrae instructions de plan_phases
+  └── load_prompt(..., orchestrator_instructions=...) → inyecta en prompt .md
+```
+
+**Por qué speckit en el orquestador y no por nodo**
+
+Speckit genera el *plan de qué construir*. Cada agente genera el *cómo ejecutarlo*. Son capas distintas — mezclarlas duplica trabajo sin beneficio neto.
+
+| Criterio | Single entry (orquestador) | Por nodo |
+|---|---|---|
+| Rol | Plan maestro coherente para todo el ciclo | Redundante — cada agente ya genera su spec |
+| Costo LLM | 1 call extra al inicio | +7 calls (uno por fase) |
+| Coherencia entre fases | Un solo contexto, visión global | Cada fase tiene vista parcial del plan |
+| HITL rejection | Plan maestro no se regenera (ok) | Spec se regenera en re-run (costoso) |
+| Complejidad del grafo | Ninguna | +7 nodos o lógica adicional por nodo |
+
+Los agentes ya tienen mecanismo propio para adaptarse al contexto acumulado (`load_prompt()` + `_get_last_feedback()`). Speckit por nodo agregaría una meta-capa sobre lo que los agentes ya hacen.
+
+**Convenciones speckit**
+- `get_phase_instructions()` en `nodes/helper.py` — único punto de extracción
+- Cada `<agente>_prompt.md` tiene sección `## Instrucciones del orquestador` con `{orchestrator_instructions}`
+- Si `plan_phases` vacío (primer arranque antes de init), retorna `""` → prompt usa fallback `"Sin instrucciones adicionales."`
+- Para cambiar modelo speckit: `MODEL_SPECKIT` en `config/settings.py` o env var
 
 ## Flujo HITL
 1. Agente termina → guarda output en `state`
@@ -148,6 +191,8 @@ Cada flecha tiene un checkpoint HITL individual. Si se rechaza, el agente re-cor
 - No usar `InMemorySaver` en producción — cambiar a `SqliteSaver`
 - No hardcodear `thread_id` — siempre viene de `state["thread_id"]`
 - No hacer `graph.invoke()` sin pasar `config = get_graph_config(thread_id)`
+- No usar `MODEL_ORCHESTRATOR` para speckit — es 8b-instant, solo sirve para routing
+- No agregar `get_phase_instructions()` dentro de los nodos — siempre via `nodes/helper.py`
 
 ## @imports para contexto adicional
 @state/cycle_state.py

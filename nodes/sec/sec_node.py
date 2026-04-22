@@ -1,5 +1,5 @@
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from config.settings import MODEL_SECURITY
@@ -20,6 +20,7 @@ def run_security_node(state: CycleState) -> dict:
         arch_content=state.get("arch_content") or "",
         dev_content=state.get("dev_content") or "",
         feedback=feedback or "Sin feedback previo.",
+        orchestrator_instructions=get_phase_instructions(state, "security") or "Sin instrucciones adicionales.",
     )
 
     try:
