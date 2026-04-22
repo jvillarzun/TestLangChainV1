@@ -203,7 +203,7 @@ def test_run_agent(agent: str, body: RunRequest):
             system_prompt += f"\n\n## Knowledge Base ({agent.upper()}):\n{rag_context}"
             rag_chars = len(rag_context)
 
-        output = llm_invoke(
+        output, _usage = llm_invoke(
             model=model,
             system_prompt=system_prompt,
             user_message=body.prompt,
