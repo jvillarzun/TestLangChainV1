@@ -139,6 +139,56 @@ def test_query(agent: str, body: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _build_sandbox_prompt(agent: str, user_prompt: str) -> str:
+    """
+    Prompt de sandbox optimizado para generar artefactos visuales completos.
+    NO usa dev_prompt.md (que es para DEVSPECS/PRs del ciclo ADLC).
+    """
+    return f"""Eres el agente {agent.upper()} de MACHBank — un desarrollador senior experto en UI/UX.
+
+## Tu tarea
+El usuario te pide generar un artefacto. Debes producir código COMPLETO y FUNCIONAL.
+
+## Reglas OBLIGATORIAS para HTML
+
+1. **HTML completo**: Siempre incluye `<!DOCTYPE html>`, `<html>`, `<head>`, `<body>`
+2. **CSS inline en `<style>`**: TODOS los estilos dentro de `<head><style>...</style></head>`
+   - Colores, gradientes, sombras, bordes redondeados
+   - Tipografía: font-family, font-size, font-weight, line-height
+   - Espaciado: margin, padding consistentes
+   - Layout: flexbox o grid para estructura
+3. **Responsive**: Incluye `<meta name="viewport">` y media queries para mobile
+4. **Diseño profesional**: NO texto plano sin estilos. Debe verse como una app real:
+   - Paleta de colores coherente (usa morados/violetas como marca MACHBank)
+   - Jerarquía visual clara (headings, cards, secciones)
+   - Hover states en elementos interactivos
+   - Iconos con emojis o SVG inline si aplica
+5. **NO uses CDNs externos** — todo el CSS debe ser inline en `<style>`
+6. **Responde SOLO con el HTML** — sin explicaciones, sin bloques markdown
+
+## Reglas para Markdown
+- Estructura clara con headings, listas, tablas
+- Código con syntax highlighting markers
+
+## Si hay templates de referencia
+- COPIA la estructura del template como base
+- ADAPTA el contenido al pedido del usuario
+- MEJORA los estilos: agrega CSS completo si el template no tiene
+- MANTÉN las secciones y patrones del template
+
+## Paleta MACHBank
+- Primary: #7C3AED (violet-600)
+- Primary dark: #5B21B6 (violet-800)
+- Primary light: #A78BFA (violet-400)
+- Background: #F8FAFC (slate-50)
+- Surface: #FFFFFF
+- Text primary: #0F172A (slate-900)
+- Text secondary: #475569 (slate-600)
+- Success: #10B981
+- Error: #EF4444
+"""
+
+
 def _detect_artifact(text: str) -> tuple[str, str]:
     """
     Detecta si el output contiene HTML y lo extrae.
@@ -170,14 +220,13 @@ def _save_artifact(agent: str, content: str, ext: str) -> str:
 @router.post("/run/{agent}")
 def test_run_agent(agent: str, body: RunRequest):
     """
-    Ejecuta el agente con prompt + RAG opcional.
-    Guarda el output como archivo y devuelve la URL — evita JSON gigante
-    y permite previsualizar HTML directo desde la URL.
+    Ejecuta el agente con prompt + RAG + templates.
+    Usa un system prompt de sandbox optimizado para generar artefactos visuales.
     """
     if agent not in _VALID_AGENTS:
         raise HTTPException(status_code=400, detail=f"Agent '{agent}' not valid")
     try:
-        from nodes.helper import load_prompt, llm_invoke
+        from nodes.helper import llm_invoke
         from rag.rag_helper import get_rag_context
 
         model = body.model or DEFAULT_MODEL
@@ -186,25 +235,8 @@ def test_run_agent(agent: str, body: RunRequest):
         if model not in valid_ids:
             raise HTTPException(status_code=400, detail=f"Model '{model}' not valid.")
 
-        try:
-            system_prompt = load_prompt(
-                agent,
-                challenge_name=body.challenge_name,
-                challenge_type=body.challenge_type,
-                challenge_description=body.prompt,
-                prd_content="[test — no disponible]",
-                ux_content="[test — no disponible]",
-                arch_content="[test — no disponible]",
-                dev_content="[test — no disponible]",
-                qa_content="[test — no disponible]",
-                infra_content="[test — no disponible]",
-                github_plan="",
-                repo_be_name="",
-                repo_fe_name="",
-                feedback="Sin feedback previo.",
-            )
-        except Exception:
-            system_prompt = f"Eres el agente {agent.upper()}. Responde con detalle según tu especialidad."
+        # System prompt de sandbox — enfocado en generar artefactos completos
+        system_prompt = _build_sandbox_prompt(agent, body.prompt)
 
         rag_context = get_rag_context(agent, body.prompt, n_results=body.n_results)
         rag_chars = 0
@@ -212,7 +244,7 @@ def test_run_agent(agent: str, body: RunRequest):
             system_prompt += f"\n\n## Knowledge Base ({agent.upper()}):\n{rag_context}"
             rag_chars = len(rag_context)
 
-        # Templates completos — inyectar ANTES del RAG chunkeado
+        # Templates completos — inyectar como base
         try:
             from rag.template_matcher import get_template_context
             tpl_context = get_template_context(agent, body.prompt)
@@ -220,8 +252,9 @@ def test_run_agent(agent: str, body: RunRequest):
                 system_prompt += (
                     f"\n\n## 📐 Templates de referencia (USAR COMO BASE)\n"
                     f"Los siguientes templates son archivos REALES del proyecto. "
-                    f"DEBES usarlos como base y adaptarlos al pedido del usuario. "
-                    f"Mantén la estructura, estilos y patrones del template.\n\n"
+                    f"DEBES usarlos como punto de partida. Copia su estructura HTML, "
+                    f"adapta el contenido al pedido del usuario, y AGREGA estilos CSS "
+                    f"completos con colores, tipografía, espaciado y responsive design.\n\n"
                     f"{tpl_context}"
                 )
                 rag_chars += len(tpl_context)
@@ -287,13 +320,14 @@ def iterate_artifact(agent: str, body: IterateRequest):
         rag_chars = len(rag_context) if rag_context else 0
 
         system_prompt = (
-            f"Eres el agente {agent.upper()} de MACHBank. "
+            f"Eres el agente {agent.upper()} de MACHBank — un desarrollador senior experto en UI/UX.\n"
             f"El usuario generó un artefacto y quiere mejorarlo.\n\n"
             f"## Artefacto actual\n```{'html' if is_html else 'markdown'}\n{previous_content}\n```\n\n"
             f"## Instrucciones\n"
             f"- Aplica el feedback del usuario al artefacto\n"
             f"- Devuelve el artefacto COMPLETO modificado, no solo los cambios\n"
-            f"- {'Devuelve HTML completo válido (con <!DOCTYPE html>)' if is_html else 'Devuelve Markdown completo'}\n"
+            f"- {'Devuelve HTML completo válido con <!DOCTYPE html>, <head> con <style> CSS completo, y <body>. TODO el CSS debe estar inline en <style>, NO uses CDNs.' if is_html else 'Devuelve Markdown completo'}\n"
+            f"- {'El HTML debe verse profesional: colores, tipografía, espaciado, responsive, hover states.' if is_html else ''}\n"
             f"- NO envuelvas la respuesta en bloques de código markdown\n"
             f"- Responde SOLO con el artefacto, sin explicaciones adicionales\n"
         )
