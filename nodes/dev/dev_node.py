@@ -143,16 +143,17 @@ def run_dev_node(state: CycleState) -> dict:
         print(f"   📚 RAG: {len(_rag)} chars de contexto inyectados")
 
     try:
-        dev_content = llm_invoke(
+        dev_content, _usage = llm_invoke(
             model=MODEL_DEV,
             system_prompt=system_prompt,
             user_message="Genera el DEVSPECS.md completo y el bloque GENERATED_FILES según las instrucciones.",
             stub_content="# DEVSPECS.md stub — TEST_MODE activo",
         )
+        _usage["agent"] = "dev"
     except Exception as e:
         print(f"[DEV-AGENT] Error LLM: {e}")
         notify_team(f"❌ DEV-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "dev", "error_message": str(e), "dev_content": None, "dev_pr_url": None, "dev_pr_urls": []}
+        return {"error_phase": "dev", "error_message": str(e), "dev_content": None, "dev_pr_url": None, "dev_pr_urls": [], "token_usage": []}
 
     output_path = save_output("DEVSPECS.md", dev_content)
     print(f"   💾 Guardado en {output_path}")
@@ -194,7 +195,7 @@ def run_dev_node(state: CycleState) -> dict:
     print(f"\n{'='*80}")
     print(f"📋 [DEV-AGENT] RESUMEN FINAL")
     print(f"{'='*80}")
-    print(f"   ✅ DEVSPECS.md generado ({len(dev_content)} chars)")
+    print(f"   ✅ DEVSPECS.md generado ({len(dev_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
     print(f"   🎫 Jira Task: {task_key or 'N/A'}")
     print(f"   🔗 PRs abiertos: {len(pr_urls)}")
     if pr_urls:
@@ -211,4 +212,5 @@ def run_dev_node(state: CycleState) -> dict:
         "error_phase":     None,
         "error_message":   None,
         "jira_story_keys": [task_key] if task_key else [],
+        "token_usage":     [_usage],
     }

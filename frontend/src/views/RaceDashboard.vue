@@ -164,6 +164,49 @@
         </div>
       </div>
 
+      <!-- ROI Card -->
+      <div v-if="roiData.totalTokens > 0 || store.status?.current_phase !== 'init'" class="card">
+        <h3 class="text-slate-300 font-semibold text-sm mb-3">⚡ ROI del Ciclo</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          <div class="bg-slate-800 rounded px-3 py-2 text-center">
+            <div class="text-xs text-slate-500 uppercase tracking-wider">Tokens totales</div>
+            <div class="text-white font-bold text-lg mt-0.5">{{ roiData.totalTokens.toLocaleString() }}</div>
+          </div>
+          <div class="bg-slate-800 rounded px-3 py-2 text-center">
+            <div class="text-xs text-slate-500 uppercase tracking-wider">Costo IA</div>
+            <div class="text-emerald-400 font-bold text-lg mt-0.5">${{ roiData.totalCost.toFixed(4) }}</div>
+          </div>
+          <div class="bg-slate-800 rounded px-3 py-2 text-center">
+            <div class="text-xs text-slate-500 uppercase tracking-wider">Tiempo IA</div>
+            <div class="text-amber-400 font-bold text-lg mt-0.5">{{ roiData.durationMin }} min</div>
+          </div>
+          <div class="bg-slate-800 rounded px-3 py-2 text-center">
+            <div class="text-xs text-slate-500 uppercase tracking-wider">Ahorro estimado</div>
+            <div class="text-purple-400 font-bold text-lg mt-0.5">~$6,000</div>
+            <div class="text-xs text-slate-600">vs 40h × 7 esp.</div>
+          </div>
+        </div>
+        <table v-if="roiData.perAgent.length" class="w-full text-xs">
+          <thead>
+            <tr class="text-slate-500 uppercase tracking-wider border-b border-slate-800">
+              <th class="text-left pb-1">Agente</th>
+              <th class="text-right pb-1">Tokens</th>
+              <th class="text-right pb-1">Costo</th>
+              <th class="text-right pb-1">Tiempo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in roiData.perAgent" :key="row.agent" class="border-b border-slate-800/50 last:border-0">
+              <td class="py-1 text-amber-400 font-semibold uppercase">{{ row.agent }}</td>
+              <td class="py-1 text-right text-slate-300">{{ row.total_tokens.toLocaleString() }}</td>
+              <td class="py-1 text-right text-emerald-400">${{ row.cost_usd.toFixed(4) }}</td>
+              <td class="py-1 text-right text-slate-400">{{ row.duration_s }}s</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="text-xs text-slate-600 text-center py-2">Los datos de tokens aparecerán a medida que corran los agentes.</div>
+      </div>
+
       <!-- Deliverables -->
       <div class="card">
         <h3 class="text-slate-300 font-semibold text-sm mb-3">Entregables</h3>
@@ -256,6 +299,35 @@ const PHASE_COLORS = {
 const phaseColor = computed(() =>
   PHASE_COLORS[store.status?.current_phase] || '#94a3b8'
 )
+
+const roiData = computed(() => {
+  const usage = store.status?.token_usage || []
+  const totalTokens = usage.reduce((s, u) => s + (u.total_tokens || 0), 0)
+  const totalCost   = usage.reduce((s, u) => s + (u.cost_usd || 0), 0)
+  const totalSecs   = usage.reduce((s, u) => s + (u.duration_s || 0), 0)
+
+  const cycleStart = store.status?.cycle_start_time
+  let durationMin = cycleStart
+    ? Math.round((Date.now() - new Date(cycleStart).getTime()) / 60000)
+    : Math.round(totalSecs / 60)
+
+  // Agrupa por agente sumando todos sus runs (re-runs por HITL)
+  const agentMap = {}
+  for (const u of usage) {
+    const key = u.agent || 'unknown'
+    if (!agentMap[key]) agentMap[key] = { agent: key, total_tokens: 0, cost_usd: 0, duration_s: 0 }
+    agentMap[key].total_tokens += u.total_tokens || 0
+    agentMap[key].cost_usd    += u.cost_usd    || 0
+    agentMap[key].duration_s  += u.duration_s  || 0
+  }
+  const perAgent = Object.values(agentMap).map(r => ({
+    ...r,
+    cost_usd:   Math.round(r.cost_usd * 1e6) / 1e6,
+    duration_s: Math.round(r.duration_s * 10) / 10,
+  }))
+
+  return { totalTokens, totalCost, durationMin, perAgent }
+})
 
 // Pull Requests URLs del agente DEV
 const prUrls = computed(() => {

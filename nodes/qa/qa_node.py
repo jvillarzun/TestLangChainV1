@@ -24,16 +24,17 @@ def run_qa_node(state: CycleState) -> dict:
     )
 
     try:
-        qa_content = llm_invoke(
+        qa_content, _usage = llm_invoke(
             model=MODEL_QA,
             system_prompt=system_prompt,
             user_message="Genera el QASCPECS.md completo. Termina con 'qa_passed: true' o 'qa_passed: false'.",
             stub_content="# QASCPECS.md stub\nqa_passed: true",
         )
+        _usage["agent"] = "qa"
     except Exception as e:
         print(f"[QA-AGENT] Error: {e}")
         notify_team(f"❌ QA-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "qa", "error_message": str(e), "qa_content": None, "qa_passed": None}
+        return {"error_phase": "qa", "error_message": str(e), "qa_content": None, "qa_passed": None, "token_usage": []}
 
     output_path = save_output("QASCPECS.md", qa_content)
     print(f"   💾 Guardado en {output_path}")
@@ -49,7 +50,7 @@ def run_qa_node(state: CycleState) -> dict:
     )
 
     result_icon = "✅" if qa_passed else "❌"
-    print(f"   {result_icon} QA {'PASS' if qa_passed else 'FAIL'}")
+    print(f"   {result_icon} QA {'PASS' if qa_passed else 'FAIL'} | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
     print(f"   🎫 Jira Task: {task_key or 'N/A'}")
 
     return {
@@ -58,4 +59,5 @@ def run_qa_node(state: CycleState) -> dict:
         "error_phase":     None,
         "error_message":   None,
         "jira_story_keys": [task_key] if task_key else [],
+        "token_usage":     [_usage],
     }

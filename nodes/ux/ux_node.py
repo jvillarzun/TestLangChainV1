@@ -24,16 +24,17 @@ def run_ux_node(state: CycleState) -> dict:
     )
 
     try:
-        ux_content = llm_invoke(
+        ux_content, _usage = llm_invoke(
             model=MODEL_UX,
             system_prompt=system_prompt,
             user_message="Genera el UXSPECS.md completo según las instrucciones.",
             stub_content="# UXSPECS.md stub — TEST_MODE activo",
         )
+        _usage["agent"] = "ux"
     except Exception as e:
         print(f"[UX-AGENT] Error: {e}")
         notify_team(f"❌ UX-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "ux", "error_message": str(e), "ux_content": None}
+        return {"error_phase": "ux", "error_message": str(e), "ux_content": None, "token_usage": []}
 
     output_path = save_output("UXSPECS.md", ux_content)
     print(f"   💾 Guardado en {output_path}")
@@ -45,11 +46,12 @@ def run_ux_node(state: CycleState) -> dict:
         epic_key=state.get("jira_epic_key"),
     )
 
-    print(f"   ✅ UXSPECS.md generado ({len(ux_content)} chars)")
+    print(f"   ✅ UXSPECS.md generado ({len(ux_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
 
     return {
         "ux_content":      ux_content,
         "error_phase":     None,
         "error_message":   None,
         "jira_story_keys": [story_key] if story_key else [],
+        "token_usage":     [_usage],
     }

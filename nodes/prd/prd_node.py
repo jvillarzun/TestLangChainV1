@@ -25,16 +25,17 @@ def run_prd_node(state: CycleState) -> dict:
     )
 
     try:
-        prd_content = llm_invoke(
+        prd_content, _usage = llm_invoke(
             model=MODEL_PRD,
             system_prompt=system_prompt,
             user_message="Genera el PRDSPECS.md completo según las instrucciones.",
             stub_content="# PRDSPECS.md stub — TEST_MODE activo",
         )
+        _usage["agent"] = "prd"
     except Exception as e:
         print(f"[PRD-AGENT] Error: {e}")
         notify_team(f"❌ PRD-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "prd", "error_message": str(e), "prd_content": None}
+        return {"error_phase": "prd", "error_message": str(e), "prd_content": None, "token_usage": []}
 
     output_path = save_output("PRDSPECS.md", prd_content)
     print(f"   💾 Guardado en {output_path}")
@@ -46,7 +47,7 @@ def run_prd_node(state: CycleState) -> dict:
         epic_key=state.get("jira_epic_key"),
     )
 
-    print(f"   ✅ PRDSPECS.md generado ({len(prd_content)} chars)")
+    print(f"   ✅ PRDSPECS.md generado ({len(prd_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
     print(f"   🎫 Jira Story: {story_key or 'N/A'}")
 
     return {
@@ -54,4 +55,5 @@ def run_prd_node(state: CycleState) -> dict:
         "error_phase":     None,
         "error_message":   None,
         "jira_story_keys": [story_key] if story_key else [],
+        "token_usage":     [_usage],
     }
