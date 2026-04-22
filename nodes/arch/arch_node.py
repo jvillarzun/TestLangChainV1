@@ -73,16 +73,17 @@ def run_arch_node(state: CycleState) -> dict:
         print(f"   📚 RAG: {len(_rag)} chars de contexto inyectados")
 
     try:
-        arch_content = llm_invoke(
+        arch_content, _usage = llm_invoke(
             model=MODEL_ARCHITECT,
             system_prompt=system_prompt,
             user_message="Genera el ARQSPECS.md completo según las instrucciones.",
             stub_content="# ARQSPECS.md stub — TEST_MODE activo",
         )
+        _usage["agent"] = "arch"
     except Exception as e:
         print(f"[ARCH-AGENT] Error: {e}")
         notify_team(f"❌ ARCHITECT-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "arch", "error_message": str(e), "arch_content": None, "github_plan": None}
+        return {"error_phase": "arch", "error_message": str(e), "arch_content": None, "github_plan": None, "token_usage": []}
 
     output_path = save_output("ARQSPECS.md", arch_content)
     print(f"   💾 Guardado en {output_path}")
@@ -100,7 +101,7 @@ def run_arch_node(state: CycleState) -> dict:
         epic_key=state.get("jira_epic_key"),
     )
 
-    print(f"   ✅ ARQSPECS.md generado ({len(arch_content)} chars)")
+    print(f"   ✅ ARQSPECS.md generado ({len(arch_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
 
     return {
         "arch_content":    arch_content,
@@ -108,4 +109,5 @@ def run_arch_node(state: CycleState) -> dict:
         "error_message":   None,
         "jira_story_keys": [story_key] if story_key else [],
         "github_plan":     _extract_engineering_plan(arch_content),
+        "token_usage":     [_usage],
     }

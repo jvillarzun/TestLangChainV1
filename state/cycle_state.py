@@ -151,6 +151,20 @@ class CycleState(TypedDict):
     # ──────────────────────────────────────────────────────────────────────────
     # ERRORES Y REINTENTOS
     # ──────────────────────────────────────────────────────────────────────────
+    token_usage: Annotated[list[dict[str, Any]], operator.add]
+    """
+    Uso de tokens por llamada LLM. Cada entrada:
+    {
+        "agent":         "prd",
+        "model":         "llama-3.3-70b-versatile",
+        "input_tokens":  1200,
+        "output_tokens": 3400,
+        "total_tokens":  4600,
+        "cost_usd":      0.003401,
+        "duration_s":    8.3,
+    }
+    """
+
     error_phase: Optional[PhaseName]
     """Fase donde ocurrió el último error."""
 
@@ -217,6 +231,8 @@ def initial_state(
         # Jira
         jira_epic_key=None,
         jira_story_keys=[],
+        # ROI
+        token_usage=[],
         # Errores
         error_phase=None,
         error_message=None,

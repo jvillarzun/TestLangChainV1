@@ -94,7 +94,7 @@ def generate_plan(body: PlanGenerate):
     }
 
     try:
-        raw = llm_invoke(MODEL_SPECKIT, ORCHESTRATOR_SYSTEM_PROMPT, user_message, json.dumps(_stub))
+        raw, _ = llm_invoke(MODEL_SPECKIT, ORCHESTRATOR_SYSTEM_PROMPT, user_message, json.dumps(_stub))
         plan = json.loads(raw)
     except (json.JSONDecodeError, Exception) as e:
         print(f"[Plan] Error generando plan: {e} — usando stub")
@@ -176,7 +176,8 @@ def get_cycle_status(thread_id: str):
         "error_phase": vals.get("error_phase"),
         "error_message": vals.get("error_message"),
         "dev_pr_urls": vals.get("dev_pr_urls", []),
-        "dev_pr_url": vals.get("dev_pr_url"),
+        "dev_pr_url":  vals.get("dev_pr_url"),
+        "token_usage": vals.get("token_usage", []),
     }
 
 

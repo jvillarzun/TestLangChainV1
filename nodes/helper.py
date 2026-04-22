@@ -1,8 +1,21 @@
+import time
 from pathlib import Path
 from typing import Any
 from state.cycle_state import CycleState
 
 _OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
+
+# Groq pricing $/1M tokens (input, output)
+_GROQ_PRICING: dict[str, dict[str, float]] = {
+    "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
+    "llama-3.1-8b-instant":    {"input": 0.05, "output": 0.08},
+}
+_PRICING_DEFAULT = {"input": 0.59, "output": 0.79}
+
+
+def _calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    p = _GROQ_PRICING.get(model, _PRICING_DEFAULT)
+    return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
 
 
 def _get_last_feedback(state: CycleState, phase: str) -> str | None:
@@ -43,26 +56,44 @@ def create_llm(model: str) -> Any:
     return ChatGroq(model=model, api_key=GROQ_API_KEY)
 
 
-def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str) -> str:
+def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str) -> tuple[str, dict]:
     """
     Wrapper de llamada LLM con soporte TEST_MODE.
+    Retorna (content, usage_dict). El caller agrega "agent" al usage_dict.
 
-    En TEST_MODE retorna stub_content directamente sin llamar al LLM.
-    En modo normal llama al modelo y retorna response.content.
+    En TEST_MODE retorna stub_content con usage en ceros.
     Lanza la excepción si el LLM falla (el nodo hace el try/except).
     """
+    _zero_usage = {"model": model, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0, "duration_s": 0.0}
+
     from config.settings import TEST_MODE
     if TEST_MODE:
         print("   [TEST_MODE] Usando stub — no se llama al LLM")
-        return stub_content
+        return stub_content, _zero_usage
 
     from langchain_core.messages import SystemMessage, HumanMessage
     llm = create_llm(model)
+    t0 = time.time()
     response = llm.invoke([
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_message),
     ])
-    return response.content
+    duration = round(time.time() - t0, 2)
+
+    meta = response.usage_metadata or {}
+    input_tokens  = meta.get("input_tokens", 0)
+    output_tokens = meta.get("output_tokens", 0)
+    total_tokens  = meta.get("total_tokens", input_tokens + output_tokens)
+
+    usage = {
+        "model":         model,
+        "input_tokens":  input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens":  total_tokens,
+        "cost_usd":      round(_calc_cost(model, input_tokens, output_tokens), 6),
+        "duration_s":    duration,
+    }
+    return response.content, usage
 
 
 def get_phase_instructions(state: "CycleState", phase: str) -> str:

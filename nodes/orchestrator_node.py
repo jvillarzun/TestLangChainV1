@@ -115,6 +115,8 @@ def orchestrator_init_node(state: CycleState) -> dict:
     from nodes.helper import llm_invoke
     from config.settings import MODEL_SPECKIT
 
+    _speckit_usage = None
+
     if state.get("plan_phases"):
         print("🧠 Plan pre-aprobado recibido — saltando speckit")
         phases = state["plan_phases"]
@@ -145,12 +147,13 @@ def orchestrator_init_node(state: CycleState) -> dict:
 
         print(f"🧠 Generando plan con speckit ({MODEL_SPECKIT})...")
         try:
-            plan_json_str = llm_invoke(
+            plan_json_str, _speckit_usage = llm_invoke(
                 model=MODEL_SPECKIT,
                 system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
                 user_message=user_message,
                 stub_content=json.dumps(_stub_plan),
             )
+            _speckit_usage["agent"] = "orchestrator"
             plan_data = json.loads(plan_json_str)
         except (json.JSONDecodeError, Exception) as e:
             print(f"⚠️  Speckit parse error: {e} — usando plan de respaldo")
@@ -191,10 +194,11 @@ def orchestrator_init_node(state: CycleState) -> dict:
 
     # ── 4. Retornar actualizaciones al estado ─────────────────────────────────
     return {
-        "plan_phases":       phases,
-        "current_phase":     "prd",  # La primera fase siempre es PRD
-        "jira_epic_key":     epic_key,
-        "cycle_start_time":  datetime.now().isoformat(),
+        "plan_phases":      phases,
+        "current_phase":    "prd",
+        "jira_epic_key":    epic_key,
+        "cycle_start_time": datetime.now().isoformat(),
+        "token_usage":      [_speckit_usage] if _speckit_usage else [],
     }
 
 
@@ -333,6 +337,45 @@ def _build_report(state: CycleState, approvals: int, rejections: int, duration: 
         for c in state["challenge_success_criteria"]:
             lines.append(f"- {c}")
         lines.append("")
+
+    # ── ROI ─────────────────────────────────────────────────────────────────
+    usage_list = state.get("token_usage", [])
+    if usage_list:
+        total_tokens = sum(u.get("total_tokens", 0) for u in usage_list)
+        total_cost   = sum(u.get("cost_usd", 0.0)   for u in usage_list)
+        total_secs   = sum(u.get("duration_s", 0.0)  for u in usage_list)
+        human_cost   = 6000  # 40h × 7 especialistas × $150/h estimado
+
+        lines += [
+            "---", "",
+            "## ROI — Retorno sobre Inversión", "",
+            "| Métrica | Valor |",
+            "|---------|-------|",
+            f"| Tokens totales consumidos | {total_tokens:,} |",
+            f"| Costo total IA (Groq) | ${total_cost:.4f} USD |",
+            f"| Tiempo total de ejecución | {total_secs:.0f}s ({total_secs/60:.1f} min) |",
+            f"| Costo equivalente humano (est.) | ~${human_cost:,} USD |",
+            f"| Ratio ahorro | {int(human_cost / total_cost):,}x |" if total_cost > 0 else "| Ratio ahorro | ∞ (free tier) |",
+            "",
+            "### Tokens por agente", "",
+            "| Agente | Input | Output | Total | Costo | Tiempo |",
+            "|--------|-------|--------|-------|-------|--------|",
+        ]
+        agent_totals: dict[str, dict] = {}
+        for u in usage_list:
+            k = u.get("agent", "?")
+            if k not in agent_totals:
+                agent_totals[k] = {"input": 0, "output": 0, "total": 0, "cost": 0.0, "secs": 0.0}
+            agent_totals[k]["input"]  += u.get("input_tokens", 0)
+            agent_totals[k]["output"] += u.get("output_tokens", 0)
+            agent_totals[k]["total"]  += u.get("total_tokens", 0)
+            agent_totals[k]["cost"]   += u.get("cost_usd", 0.0)
+            agent_totals[k]["secs"]   += u.get("duration_s", 0.0)
+        for agent, t in agent_totals.items():
+            lines.append(
+                f"| **{agent.upper()}** | {t['input']:,} | {t['output']:,} | {t['total']:,} | ${t['cost']:.4f} | {t['secs']:.1f}s |"
+            )
+        lines += ["", f"> *Costo equivalente humano estimado: 40h × 7 especialistas × $150/h USD.*", ""]
 
     # ── Tabla de entregables ─────────────────────────────────────────────────
     lines += [
