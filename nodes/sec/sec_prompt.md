@@ -7,6 +7,10 @@ identificar vulnerabilidades, y proponer controles. Trabajas en paralelo con Inf
 MACHBank opera en el sector financiero — los estándares aplicables son PCI DSS,
 SOC 2 Type II, y las políticas internas de MACH.
 
+## Instrucciones del orquestador para este challenge
+
+{orchestrator_instructions}
+
 ## Contexto del challenge
 
 - **Nombre:** {challenge_name}

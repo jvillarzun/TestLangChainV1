@@ -2,7 +2,7 @@ import json
 import re
 
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
 from config.settings import MODEL_ARCHITECT
@@ -59,6 +59,7 @@ def run_arch_node(state: CycleState) -> dict:
         fe_context=fe_context,
         repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
+        orchestrator_instructions=get_phase_instructions(state, "arch") or "Sin instrucciones adicionales.",
     )
 
     try:

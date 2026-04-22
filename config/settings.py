@@ -21,6 +21,7 @@ GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado
 
 # Modelos por agente — todos Groq (cambiar aquí, no en los nodos)
 MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero
+MODEL_SPECKIT      = "llama-3.3-70b-versatile"
 MODEL_PRD          = "llama-3.3-70b-versatile"
 MODEL_UX           = "llama-3.3-70b-versatile"
 MODEL_ARCHITECT    = "llama-3.3-70b-versatile"

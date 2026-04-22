@@ -110,55 +110,47 @@ def orchestrator_init_node(state: CycleState) -> dict:
     print(f"   Thread ID: {state['thread_id']}")
     print(f"{'='*60}\n")
 
-    # ── 1. Generar plan con Claude Opus ───────────────────────────────────────
-    # llm = ChatAnthropic(model=MODEL_ORCHESTRATOR, max_tokens=2000)
-    # llm = ChatGoogleGenerativeAI(model=MODEL_ORCHESTRATOR, max_tokens=2000)
+    # ── 1. Generar plan con speckit (llm_invoke usa TEST_MODE automáticamente) ─
+    import json
+    from nodes.helper import llm_invoke
+    from config.settings import MODEL_SPECKIT
 
-    # criteria_text = "\n".join(f"- {c}" for c in state["challenge_success_criteria"])
+    criteria_text = "\n".join(f"- {c}" for c in state["challenge_success_criteria"])
+    user_message = PLAN_PROMPT_TEMPLATE.format(
+        name=state["challenge_name"],
+        type=state["challenge_type"],
+        description=state["challenge_description"],
+        criteria=criteria_text,
+    )
 
-    # prompt = PLAN_PROMPT_TEMPLATE.format(
-    #     name=state["challenge_name"],
-    #     type=state["challenge_type"],
-    #     description=state["challenge_description"],
-    #     criteria=criteria_text,
-    # )
-
-    # print("🧠 Generando plan con Claude Opus...")
-    # response = llm.invoke([
-    #     SystemMessage(content=ORCHESTRATOR_SYSTEM_PROMPT),
-    #     HumanMessage(content=prompt),
-    # ])
-
-    # import json
-    # plan_data = json.loads(response.content)
-
-    # ── STUB — plan hardcodeado para probar Jira/Slack sin LLM ───────────────
-    print("🧠 [STUB] Usando plan hardcodeado — LLM desactivado")
-    plan_data = {
-        "analysis": {
-            "domain": "test",
-            "complexity": "low",
-            "key_risks": [],
-            "tech_stack": [],
-        },
+    _stub_plan = {
+        "analysis": {"domain": "test", "complexity": "low", "key_risks": [], "tech_stack": []},
         "phases": [
-            {"phase": "prd",      "agent": "prd-agent",       "model": "stub", "depends_on": [],              "instructions": "stub", "key_outputs": []},
-            {"phase": "ux",       "agent": "ux-agent",        "model": "stub", "depends_on": ["prd"],         "instructions": "stub", "key_outputs": []},
-            {"phase": "arch",     "agent": "architect-agent", "model": "stub", "depends_on": ["prd"],         "instructions": "stub", "key_outputs": []},
-            {"phase": "dev",      "agent": "dev-agent",       "model": "stub", "depends_on": ["prd", "arch"], "instructions": "stub", "key_outputs": []},
-            {"phase": "qa",       "agent": "qa-agent",        "model": "stub", "depends_on": ["dev"],         "instructions": "stub", "key_outputs": []},
-            {"phase": "infra",    "agent": "infra-agent",     "model": "stub", "depends_on": ["qa"],          "instructions": "stub", "key_outputs": []},
-            {"phase": "security", "agent": "security-agent",  "model": "stub", "depends_on": ["qa"],          "instructions": "stub", "key_outputs": []},
+            {"phase": "prd",      "agent": "prd-agent",       "model": "stub", "depends_on": [],              "instructions": "Genera el PRD completo para el challenge.", "key_outputs": ["PRDSPECS.md"]},
+            {"phase": "ux",       "agent": "ux-agent",        "model": "stub", "depends_on": ["prd"],         "instructions": "Diseña la experiencia de usuario basada en el PRD.", "key_outputs": ["UXSPECS.md"]},
+            {"phase": "arch",     "agent": "architect-agent", "model": "stub", "depends_on": ["prd"],         "instructions": "Define la arquitectura técnica del sistema.", "key_outputs": ["ARQSPECS.md"]},
+            {"phase": "dev",      "agent": "dev-agent",       "model": "stub", "depends_on": ["prd", "arch"], "instructions": "Implementa el código según PRD y arquitectura.", "key_outputs": ["DEVSPECS.md"]},
+            {"phase": "qa",       "agent": "qa-agent",        "model": "stub", "depends_on": ["dev"],         "instructions": "Valida la implementación contra criterios del PRD.", "key_outputs": ["QASCPECS.md"]},
+            {"phase": "infra",    "agent": "infra-agent",     "model": "stub", "depends_on": ["qa"],          "instructions": "Define infraestructura cloud y CI/CD.", "key_outputs": ["INFESPEOS.md"]},
+            {"phase": "security", "agent": "security-agent",  "model": "stub", "depends_on": ["qa"],          "instructions": "Audita seguridad OWASP Top 10 y DevSecOps.", "key_outputs": ["DEVSECOPS.md"]},
         ],
-        "success_metrics": {
-            "prd":      "stub",
-            "ux_arch":  "stub",
-            "dev":      "stub",
-            "qa":       "stub",
-            "infra_sec":"stub",
-        },
+        "success_metrics": {"prd": "stub", "ux_arch": "stub", "dev": "stub", "qa": "stub", "infra_sec": "stub"},
         "estimated_cycle_minutes": 1,
     }
+
+    print(f"🧠 Generando plan con speckit ({MODEL_SPECKIT})...")
+    try:
+        plan_json_str = llm_invoke(
+            model=MODEL_SPECKIT,
+            system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
+            user_message=user_message,
+            stub_content=json.dumps(_stub_plan),
+        )
+        plan_data = json.loads(plan_json_str)
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"⚠️  Speckit parse error: {e} — usando plan de respaldo")
+        plan_data = _stub_plan
+
     phases = plan_data["phases"]
 
     print(f"✅ Plan generado: {len(phases)} fases")

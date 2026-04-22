@@ -1,5 +1,5 @@
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from config.settings import MODEL_INFRA
@@ -20,6 +20,7 @@ def run_infra_node(state: CycleState) -> dict:
         arch_content=state.get("arch_content") or "",
         qa_content=state.get("qa_content") or "",
         feedback=feedback or "Sin feedback previo.",
+        orchestrator_instructions=get_phase_instructions(state, "infra") or "Sin instrucciones adicionales.",
     )
 
     try:
