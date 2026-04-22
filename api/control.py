@@ -53,11 +53,66 @@ def update_prompt(agent: str, body: PromptUpdate):
 
 # ── Cycle endpoints ───────────────────────────────────────────────────────────
 
+class PlanGenerate(BaseModel):
+    challenge_name: str
+    challenge_type: str
+    challenge_description: str
+    challenge_success_criteria: list[str]
+
+
+@router.post("/plan/generate")
+def generate_plan(body: PlanGenerate):
+    """
+    Genera el plan speckit sin arrancar el ciclo.
+    El frontend muestra el plan para revisión antes de confirmar.
+    """
+    import json
+    from nodes.helper import llm_invoke
+    from nodes.orchestrator_node import ORCHESTRATOR_SYSTEM_PROMPT, PLAN_PROMPT_TEMPLATE
+    from config.settings import MODEL_SPECKIT
+
+    criteria_text = "\n".join(f"- {c}" for c in body.challenge_success_criteria)
+    user_message = PLAN_PROMPT_TEMPLATE.format(
+        name=body.challenge_name,
+        type=body.challenge_type,
+        description=body.challenge_description,
+        criteria=criteria_text,
+    )
+
+    _stub = {
+        "analysis": {"domain": "test", "complexity": "low", "key_risks": [], "tech_stack": []},
+        "phases": [
+            {"phase": "prd",      "agent": "prd-agent",       "depends_on": [],              "instructions": "Genera el PRD completo para el challenge.", "key_outputs": ["PRDSPECS.md"]},
+            {"phase": "ux",       "agent": "ux-agent",        "depends_on": ["prd"],         "instructions": "Diseña la experiencia de usuario basada en el PRD.", "key_outputs": ["UXSPECS.md"]},
+            {"phase": "arch",     "agent": "architect-agent", "depends_on": ["prd"],         "instructions": "Define la arquitectura técnica del sistema.", "key_outputs": ["ARQSPECS.md"]},
+            {"phase": "dev",      "agent": "dev-agent",       "depends_on": ["prd", "arch"], "instructions": "Implementa el código según PRD y arquitectura.", "key_outputs": ["DEVSPECS.md"]},
+            {"phase": "qa",       "agent": "qa-agent",        "depends_on": ["dev"],         "instructions": "Valida la implementación contra criterios del PRD.", "key_outputs": ["QASCPECS.md"]},
+            {"phase": "infra",    "agent": "infra-agent",     "depends_on": ["qa"],          "instructions": "Define infraestructura cloud y CI/CD.", "key_outputs": ["INFESPEOS.md"]},
+            {"phase": "security", "agent": "security-agent",  "depends_on": ["qa"],          "instructions": "Audita seguridad OWASP Top 10 y DevSecOps.", "key_outputs": ["DEVSECOPS.md"]},
+        ],
+        "estimated_cycle_minutes": 1,
+    }
+
+    try:
+        raw = llm_invoke(MODEL_SPECKIT, ORCHESTRATOR_SYSTEM_PROMPT, user_message, json.dumps(_stub))
+        plan = json.loads(raw)
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"[Plan] Error generando plan: {e} — usando stub")
+        plan = _stub
+
+    return {
+        "plan_phases": plan["phases"],
+        "analysis":    plan.get("analysis", {}),
+        "estimated_cycle_minutes": plan.get("estimated_cycle_minutes", 90),
+    }
+
+
 class CycleStart(BaseModel):
     challenge_name: str
     challenge_type: str
     challenge_description: str
     challenge_success_criteria: list[str]
+    plan_phases: list[dict] = []   # pre-aprobado desde /api/plan/generate
     test_mode: bool = False
 
 
@@ -81,6 +136,8 @@ def start_cycle(body: CycleStart):
         from graph.singleton import get_graph, get_graph_config
         graph = get_graph()
         state = initial_state(thread_id=thread_id, **challenge)
+        if body.plan_phases:
+            state["plan_phases"] = body.plan_phases
         config = get_graph_config(thread_id)
         try:
             graph.invoke(state, config=config)
