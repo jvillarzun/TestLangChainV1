@@ -23,6 +23,8 @@ _VALID_EXTENSIONS = {".txt", ".md", ".py", ".kt", ".swift", ".java", ".pdf", ".t
 DEFAULT_MODEL = "llama-3.1-8b-instant"
 
 _MODEL_LIST = [
+    {"id": "gpt-4o-mini",             "label": "GPT-4o Mini (OpenAI)"},
+    {"id": "gpt-4o",                  "label": "GPT-4o (OpenAI)"},
     {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B"},
     {"id": "llama-3.1-70b-versatile", "label": "Llama 3.1 70B"},
     {"id": "llama-3.1-8b-instant",    "label": "Llama 3.1 8B (fast)"},

@@ -10,11 +10,21 @@ _GROQ_PRICING: dict[str, dict[str, float]] = {
     "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
     "llama-3.1-8b-instant":    {"input": 0.05, "output": 0.08},
 }
+# OpenAI pricing $/1M tokens (input, output)
+_OPENAI_PRICING: dict[str, dict[str, float]] = {
+    "gpt-4o":      {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4.1":     {"input": 2.00, "output": 8.00},
+    "gpt-4.1-mini":{"input": 0.40, "output": 1.60},
+    "gpt-4.1-nano":{"input": 0.10, "output": 0.40},
+}
 _PRICING_DEFAULT = {"input": 0.59, "output": 0.79}
+
+_OPENAI_MODELS = set(_OPENAI_PRICING.keys())
 
 
 def _calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    p = _GROQ_PRICING.get(model, _PRICING_DEFAULT)
+    p = _GROQ_PRICING.get(model) or _OPENAI_PRICING.get(model) or _PRICING_DEFAULT
     return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
 
 
@@ -50,7 +60,11 @@ def load_prompt(agent: str, **kwargs) -> str:
 
 
 def create_llm(model: str) -> Any:
-    """Crea instancia LLM. Único lugar para cambiar proveedor (actualmente Groq)."""
+    """Crea instancia LLM. Soporta Groq y OpenAI según el modelo."""
+    if model in _OPENAI_MODELS:
+        from langchain_openai import ChatOpenAI
+        from config.settings import OPENAI_API_KEY
+        return ChatOpenAI(model=model, api_key=OPENAI_API_KEY)
     from langchain_groq import ChatGroq
     from config.settings import GROQ_API_KEY
     return ChatGroq(model=model, api_key=GROQ_API_KEY)

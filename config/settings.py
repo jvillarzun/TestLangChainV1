@@ -19,16 +19,19 @@ GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "te
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
 GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado, no usado actualmente
 
-# Modelos por agente — todos Groq (cambiar aquí, no en los nodos)
+# Modelos por agente — todos Groq excepto DEV que usa OpenAI
 MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero
 MODEL_SPECKIT      = "llama-3.3-70b-versatile"
 MODEL_PRD          = "llama-3.3-70b-versatile"
 MODEL_UX           = "llama-3.3-70b-versatile"
 MODEL_ARCHITECT    = "llama-3.3-70b-versatile"
-MODEL_DEV          = "llama-3.3-70b-versatile"
+MODEL_DEV          = "gpt-4o-mini"                 # OpenAI — mejor calidad para código
 MODEL_QA           = "llama-3.3-70b-versatile"
 MODEL_INFRA        = "llama-3.3-70b-versatile"
 MODEL_SECURITY     = "llama-3.3-70b-versatile"
+
+# ── OpenAI ─────────────────────────────────────────────────────────────────────
+OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
 
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
