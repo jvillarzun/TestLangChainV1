@@ -96,6 +96,13 @@ class RunRequest(BaseModel):
     model: str | None = None  # override per-request; None = use agent default
 
 
+class IterateRequest(BaseModel):
+    artifact_url: str
+    feedback: str
+    model: str | None = None
+    n_results: int = 3
+
+
 @router.post("/query/{agent}")
 def test_query(agent: str, body: QueryRequest):
     """Devuelve chunks RAG para una query sin llamar al LLM."""
@@ -221,6 +228,84 @@ def test_run_agent(agent: str, body: RunRequest):
             "rag_used":      rag_chars > 0,
             "rag_chars":     rag_chars,
             "model":         model,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/iterate/{agent}")
+def iterate_artifact(agent: str, body: IterateRequest):
+    """
+    Itera sobre un artefacto existente con feedback del usuario.
+    Lee el artefacto anterior, lo pasa como contexto y aplica el feedback.
+    """
+    if agent not in _VALID_AGENTS:
+        raise HTTPException(status_code=400, detail=f"Agent '{agent}' not valid")
+    try:
+        from pathlib import Path
+        from nodes.helper import llm_invoke
+        from rag.rag_helper import get_rag_context
+
+        model = body.model or DEFAULT_MODEL
+        valid_ids = {m["id"] for m in GROQ_MODELS}
+        if model not in valid_ids:
+            raise HTTPException(status_code=400, detail=f"Model '{model}' not valid.")
+
+        # Leer artefacto anterior desde disco
+        filename = body.artifact_url.split("/")[-1]
+        artifact_path = Path(__file__).parent.parent / "outputs" / filename
+        if not artifact_path.exists():
+            raise HTTPException(status_code=404, detail="Artefacto anterior no encontrado")
+        previous_content = artifact_path.read_text(encoding="utf-8")
+
+        # Detectar tipo del artefacto anterior
+        prev_type, _ = _detect_artifact(previous_content)
+        is_html = prev_type == "html" or filename.endswith(".html")
+
+        # RAG context
+        rag_context = get_rag_context(agent, body.feedback, n_results=body.n_results)
+        rag_chars = len(rag_context) if rag_context else 0
+
+        system_prompt = (
+            f"Eres el agente {agent.upper()} de MACHBank. "
+            f"El usuario generó un artefacto y quiere mejorarlo.\n\n"
+            f"## Artefacto actual\n```{'html' if is_html else 'markdown'}\n{previous_content}\n```\n\n"
+            f"## Instrucciones\n"
+            f"- Aplica el feedback del usuario al artefacto\n"
+            f"- Devuelve el artefacto COMPLETO modificado, no solo los cambios\n"
+            f"- {'Devuelve HTML completo válido (con <!DOCTYPE html>)' if is_html else 'Devuelve Markdown completo'}\n"
+            f"- NO envuelvas la respuesta en bloques de código markdown\n"
+            f"- Responde SOLO con el artefacto, sin explicaciones adicionales\n"
+        )
+        if rag_context:
+            system_prompt += f"\n\n## Knowledge Base ({agent.upper()}):\n{rag_context}"
+
+        output, _usage = llm_invoke(
+            model=model,
+            system_prompt=system_prompt,
+            user_message=body.feedback,
+            stub_content=f"[TEST_MODE] stub iteración — agente {agent}",
+        )
+
+        artifact_type, clean = _detect_artifact(output)
+        # Si el anterior era HTML, forzar HTML
+        if is_html and artifact_type != "html":
+            artifact_type = "html"
+            clean = output.strip()
+
+        ext = "html" if artifact_type == "html" else "md"
+        artifact_url = _save_artifact(agent, clean, ext)
+
+        return {
+            "agent":         agent,
+            "artifact_url":  artifact_url,
+            "artifact_type": artifact_type,
+            "rag_used":      rag_chars > 0,
+            "rag_chars":     rag_chars,
+            "model":         model,
+            "iteration":     True,
         }
     except HTTPException:
         raise

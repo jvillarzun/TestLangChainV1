@@ -215,7 +215,9 @@
                     :rag-used="testState[agent.agent].artifactA.ragUsed"
                     :rag-chars="testState[agent.agent].artifactA.ragChars"
                     :label="testInputs[agent.agent]?.abMode ? 'A' : ''"
+                    :agent="agent.agent"
                     variant="violet"
+                    @iterate="onIterate(agent.agent, 'A', $event)"
                   />
                 </Transition>
                 <!-- Output B -->
@@ -227,8 +229,10 @@
                     :model="testState[agent.agent].artifactB.model"
                     :rag-used="testState[agent.agent].artifactB.ragUsed"
                     :rag-chars="testState[agent.agent].artifactB.ragChars"
+                    :agent="agent.agent"
                     label="B"
                     variant="amber"
+                    @iterate="onIterate(agent.agent, 'B', $event)"
                   />
                 </Transition>
               </div>
@@ -277,11 +281,17 @@ const AgentOutput = defineComponent({
     ragChars:     Number,
     label:        { type: String, default: '' },
     variant:      { type: String, default: 'violet' },
+    agent:        { type: String, default: '' },
   },
-  setup(props) {
-    const activeTab  = ref('preview')
-    const mdContent  = ref('')
-    const mdLoading  = ref(false)
+  emits: ['iterate'],
+  setup(props, { emit }) {
+    const activeTab      = ref('preview')
+    const mdContent      = ref('')
+    const mdLoading      = ref(false)
+    const feedbackText   = ref('')
+    const showFeedback   = ref(false)
+    const iterating      = ref(false)
+    const iterationCount = ref(0)
 
     // Para MD: fetch el contenido para mostrarlo en el pre
     watch(() => props.artifactUrl, async (url) => {
@@ -298,13 +308,53 @@ const AgentOutput = defineComponent({
       props.variant === 'amber' ? 'border-amber-700/40' : 'border-violet-700/30'
     )
 
+    async function handleIterate() {
+      if (!feedbackText.value.trim() || !props.agent) return
+      iterating.value = true
+      try {
+        const res = await fetch(`/api/rag/iterate/${props.agent}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            artifact_url: props.artifactUrl,
+            feedback: feedbackText.value,
+            model: props.model,
+            n_results: 3,
+          }),
+        })
+        const ct = res.headers.get('content-type') || ''
+        if (!ct.includes('application/json')) throw new Error(`Error del servidor (${res.status})`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.detail)
+        iterationCount.value++
+        feedbackText.value = ''
+        showFeedback.value = false
+        emit('iterate', {
+          url: data.artifact_url,
+          type: data.artifact_type,
+          model: data.model,
+          ragUsed: data.rag_used,
+          ragChars: data.rag_chars,
+        })
+      } catch (e) {
+        alert(`Error iterando: ${e.message}`)
+      } finally {
+        iterating.value = false
+      }
+    }
+
     return () => {
       const label = props.label
         ? h('span', { class: `text-xs font-bold px-1.5 py-0.5 rounded ${props.variant === 'amber' ? 'bg-amber-900/40 text-amber-300' : 'bg-violet-900/40 text-violet-300'}` }, props.label)
         : null
 
+      const iterBadge = iterationCount.value > 0
+        ? h('span', { class: 'text-xs bg-cyan-900/40 text-cyan-300 px-1.5 py-0.5 rounded' }, `v${iterationCount.value + 1}`)
+        : null
+
       const meta = h('div', { class: 'flex items-center gap-2 flex-wrap' }, [
         label,
+        iterBadge,
         props.ragUsed
           ? h('span', { class: 'text-emerald-400 text-xs' }, `📚 RAG (${props.ragChars}ch)`)
           : h('span', { class: 'text-slate-600 text-xs' }, 'Sin RAG'),
@@ -313,11 +363,49 @@ const AgentOutput = defineComponent({
           `· ${(props.artifactType || '').toUpperCase()}`),
       ])
 
-      const downloadBtn = h('a', {
-        href: props.artifactUrl,
-        download: true,
-        class: 'text-xs text-slate-500 hover:text-white border border-slate-600 hover:border-slate-400 rounded px-2 py-0.5 transition-colors',
-      }, '↓ Descargar')
+      const actionBtns = h('div', { class: 'flex items-center gap-2' }, [
+        h('button', {
+          onClick: () => { showFeedback.value = !showFeedback.value },
+          class: `text-xs px-2.5 py-1 rounded border transition-colors ${showFeedback.value ? 'bg-cyan-900/40 border-cyan-600 text-cyan-300' : 'border-slate-600 text-slate-400 hover:border-cyan-600 hover:text-cyan-300'}`,
+        }, '🔄 Iterar'),
+        h('a', {
+          href: props.artifactUrl,
+          download: true,
+          class: 'text-xs text-slate-500 hover:text-white border border-slate-600 hover:border-slate-400 rounded px-2 py-0.5 transition-colors',
+        }, '↓'),
+        props.artifactType === 'html'
+          ? h('a', {
+              href: props.artifactUrl,
+              target: '_blank',
+              class: 'text-xs text-slate-500 hover:text-white border border-slate-600 hover:border-slate-400 rounded px-2 py-0.5 transition-colors',
+            }, '↗')
+          : null,
+      ])
+
+      // Feedback panel
+      const feedbackPanel = showFeedback.value
+        ? h('div', { class: 'border-t border-slate-700/60 pt-3 mt-3 space-y-2' }, [
+            h('label', { class: 'text-cyan-400 text-xs font-semibold' }, '🔄 ¿Qué quieres cambiar?'),
+            h('textarea', {
+              value: feedbackText.value,
+              onInput: (e) => { feedbackText.value = e.target.value },
+              rows: 2,
+              placeholder: 'Ej: Cambia los colores a tonos más oscuros, agrega un footer con links...',
+              class: 'w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none transition-colors',
+            }),
+            h('div', { class: 'flex gap-2' }, [
+              h('button', {
+                onClick: handleIterate,
+                disabled: iterating.value || !feedbackText.value.trim(),
+                class: 'flex-1 text-xs py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white transition-colors disabled:opacity-30',
+              }, iterating.value ? '⏳ Iterando...' : '▶ Aplicar cambios'),
+              h('button', {
+                onClick: () => { showFeedback.value = false; feedbackText.value = '' },
+                class: 'text-xs px-3 py-2 rounded-lg border border-slate-700 text-slate-500 hover:text-slate-300 transition-colors',
+              }, 'Cancelar'),
+            ]),
+          ])
+        : null
 
       let content
       if (props.artifactType === 'html') {
@@ -342,8 +430,9 @@ const AgentOutput = defineComponent({
       }
 
       return h('div', { class: `border ${borderColor.value} rounded-xl p-4 space-y-3 bg-slate-800/30` }, [
-        h('div', { class: 'flex items-center justify-between gap-2' }, [meta, downloadBtn]),
+        h('div', { class: 'flex items-center justify-between gap-2' }, [meta, actionBtns]),
         content,
+        feedbackPanel,
       ])
     }
   }
@@ -529,6 +618,21 @@ async function runAgent(agent, slot = 'A') {
     }
   } catch (e) {
     testState[agent] = { ...testState[agent], error: e.message, [loadingKey]: false }
+  }
+}
+
+// ── Iterate — actualiza artefacto con feedback ───────────────────────────────
+function onIterate(agent, slot, data) {
+  const artifactKey = `artifact${slot}`
+  testState[agent] = {
+    ...testState[agent],
+    [artifactKey]: {
+      url:      data.url,
+      type:     data.type,
+      model:    data.model,
+      ragUsed:  data.ragUsed,
+      ragChars: data.ragChars,
+    },
   }
 }
 
