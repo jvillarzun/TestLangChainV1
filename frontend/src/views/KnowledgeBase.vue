@@ -292,6 +292,7 @@ const AgentOutput = defineComponent({
     const showFeedback   = ref(false)
     const iterating      = ref(false)
     const iterationCount = ref(0)
+    const isExpanded     = ref(false)
 
     // Para MD: fetch el contenido para mostrarlo en el pre
     watch(() => props.artifactUrl, async (url) => {
@@ -409,7 +410,7 @@ const AgentOutput = defineComponent({
 
       let content
       if (props.artifactType === 'html') {
-        const tabs = h('div', { class: 'flex gap-1 mb-2' }, [
+        const tabs = h('div', { class: 'flex items-center gap-1 mb-2' }, [
           h('button', {
             onClick: () => activeTab.value = 'preview',
             class: `text-xs px-3 py-1 rounded-t border-b-2 transition-colors ${activeTab.value === 'preview' ? 'border-violet-500 text-violet-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`,
@@ -418,10 +419,26 @@ const AgentOutput = defineComponent({
             onClick: () => activeTab.value = 'code',
             class: `text-xs px-3 py-1 rounded-t border-b-2 transition-colors ${activeTab.value === 'code' ? 'border-violet-500 text-violet-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`,
           }, '📝 Código'),
+          h('div', { class: 'flex-1' }),
+          h('button', {
+            onClick: () => { isExpanded.value = !isExpanded.value },
+            class: 'text-xs px-2 py-0.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 transition-colors',
+          }, isExpanded.value ? '⊟ Reducir' : '⊞ Expandir'),
         ])
+        const iframeHeight = isExpanded.value ? 'h-[80vh]' : 'h-[500px]'
         const body = activeTab.value === 'preview'
-          ? h('iframe', { src: props.artifactUrl, class: 'w-full h-80 rounded-lg border border-slate-700 bg-white', sandbox: 'allow-scripts' })
-          : h('iframe', { src: props.artifactUrl, class: 'w-full h-80 rounded-lg border border-slate-700 bg-slate-900 font-mono text-xs' })
+          ? h('iframe', {
+              src: props.artifactUrl,
+              class: `w-full ${iframeHeight} rounded-lg border border-slate-700 bg-white transition-all duration-300`,
+              sandbox: 'allow-scripts allow-same-origin',
+              style: 'color-scheme: light',
+            })
+          : h('iframe', {
+              src: props.artifactUrl,
+              class: `w-full ${iframeHeight} rounded-lg border border-slate-700 bg-slate-900 font-mono text-xs transition-all duration-300`,
+              sandbox: 'allow-same-origin',
+              style: 'color-scheme: light',
+            })
         content = h('div', {}, [tabs, body])
       } else {
         content = mdLoading.value
