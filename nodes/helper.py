@@ -44,10 +44,23 @@ def load_prompt(agent: str, **kwargs) -> str:
 
 
 def create_llm(model: str) -> Any:
-    """Crea instancia LLM. Único lugar para cambiar proveedor (actualmente Groq)."""
-    from langchain_groq import ChatGroq
-    from config.settings import GROQ_API_KEY
-    return ChatGroq(model=model, api_key=GROQ_API_KEY)
+    """
+    Crea instancia LLM. Único lugar para cambiar proveedor.
+    
+    Actualmente: Google Gemini 1.5 Flash vía LangChain.
+    Parámetros optimizados para Gemini:
+    - temperature=0.2: Balance entre creatividad y determinismo
+    - convert_system_message_to_human=True: Recomendado por Google para mejor compatibilidad
+    """
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from config.settings import GOOGLE_API_KEY
+    
+    return ChatGoogleGenerativeAI(
+        model=model,
+        google_api_key=GOOGLE_API_KEY,
+        temperature=0.2,
+        convert_system_message_to_human=True,  # Convierte system messages a formato que Gemini espera
+    )
 
 
 def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str) -> str:

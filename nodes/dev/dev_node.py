@@ -389,41 +389,63 @@ def run_dev_node(state: CycleState) -> dict:
     fe_files: list[dict] = []
 
     if generated_files:
-        be_files = [f for f in generated_files if f.get("repo") == "backend"]
-        fe_files = [f for f in generated_files if f.get("repo") == "frontend"]
+        # Filtro robusto: acepta "backend", "be", o el nombre completo del repo
+        be_files = [f for f in generated_files if (
+            f.get("repo") == "backend" or 
+            f.get("repo") == "be" or 
+            REPO_BE_NAME in f.get("repo", "")
+        )]
+        fe_files = [f for f in generated_files if (
+            f.get("repo") == "frontend" or 
+            f.get("repo") == "fe" or 
+            REPO_FE_NAME in f.get("repo", "")
+        )]
+        
         challenge_name = state["challenge_name"]
+        
+        print(f"\n📦 [Separación de archivos]")
+        print(f"   Backend: {len(be_files)} archivos")
+        print(f"   Frontend: {len(fe_files)} archivos")
 
         if be_files:
-            print(f"   📦 Subiendo {len(be_files)} archivos a {REPO_BE_NAME}...")
+            print(f"\n📤 [Subiendo Backend] {len(be_files)} archivos a {REPO_BE_NAME}...")
             pr = _push_files_and_open_pr(REPO_BE_NAME, branch, be_files, challenge_name, github_plan)
             if pr:
                 pr_urls.append(pr)
-                print(f"   🔗 PR backend: {pr}")
+                print(f"   ✅ PR backend creado: {pr}")
+            else:
+                print(f"   ⚠️  No se pudo crear PR backend")
 
         if fe_files:
-            print(f"   📦 Subiendo {len(fe_files)} archivos a {REPO_FE_NAME}...")
+            print(f"\n📤 [Subiendo Frontend] {len(fe_files)} archivos a {REPO_FE_NAME}...")
             pr = _push_files_and_open_pr(REPO_FE_NAME, branch, fe_files, challenge_name, github_plan)
             if pr:
                 pr_urls.append(pr)
-                print(f"   🔗 PR frontend: {pr}")
+                print(f"   ✅ PR frontend creado: {pr}")
+            else:
+                print(f"   ⚠️  No se pudo crear PR frontend")
     else:
-        print("   ⚠️  GENERATED_FILES no encontrado — no se abrieron PRs")
+        print("\n⚠️  [Sin archivos generados] No se abrieron PRs")
 
     # ── Iniciar servidor de preview si está habilitado ────────────────────────
     if ENABLE_BUILD_VALIDATION and fe_files:
-        print(f"\n🚀 [Preview] Intentando iniciar servidor de preview...")
+        print(f"\n🚀 [Preview Server] Intentando iniciar servidor de preview...")
         from nodes.dev.build_validator import setup_repo, start_preview_server
         
         fe_repo_path = setup_repo(REPO_FE_NAME, branch, fe_files)
         if fe_repo_path:
-            success, preview_url = start_preview_server(fe_repo_path, port=3001)
+            success, url = start_preview_server(fe_repo_path, port=3001)
             if success:
-                print(f"   ✅ Preview disponible en: {preview_url}")
+                preview_url = url
+                print(f"   ✅ Preview disponible: {preview_url}")
             else:
                 print(f"   ⚠️  No se pudo iniciar servidor de preview")
         else:
             print(f"   ⚠️  No se pudo preparar repo para preview")
+    elif fe_files:
+        print(f"\n⚠️  [Preview Server] Validación de build deshabilitada - no se inicia preview")
     
+    # ── Crear Jira Task ──────────────────────────────────────────────────────
     task_key = create_task(
         phase="dev",
         summary=f"{state['challenge_name']} — Implementation",

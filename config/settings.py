@@ -19,19 +19,19 @@ TEST_MODE: bool = os.environ.get("TEST_MODE", "false").lower() == "true"
 # Útil para probar solo DEV/QA/etc sin gastar tokens en fases tempranas
 MOCK_EARLY_AGENTS: bool = os.environ.get("MOCK_EARLY_AGENTS", "false").lower() == "true"
 
-GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"
+GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"  # legacy, no usado
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
-GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado, no usado actualmente
+GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "") if not TEST_MODE else "test"  # Motor LLM principal
 
-# Modelos por agente — todos Groq (cambiar aquí, no en los nodos)
-MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero
-MODEL_PRD          = "llama-3.3-70b-versatile"
-MODEL_UX           = "llama-3.3-70b-versatile"
-MODEL_ARCHITECT    = "llama-3.3-70b-versatile"
-MODEL_DEV          = "llama-3.3-70b-versatile"
-MODEL_QA           = "llama-3.3-70b-versatile"
-MODEL_INFRA        = "llama-3.3-70b-versatile"
-MODEL_SECURITY     = "llama-3.3-70b-versatile"
+# Modelos por agente
+MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero y rápido
+MODEL_PRD          = "llama-3.3-70b-versatile"       # generación de PRD
+MODEL_UX           = "llama-3.3-70b-versatile"       # diseño de UX
+MODEL_ARCHITECT    = "gemini-2.5-flash"       # arquitectura y engineering plan (Gemini 2.5 Flash)
+MODEL_DEV          = "gemini-2.5-flash"       # generación de código (Gemini 2.5 Flash)
+MODEL_QA           = "llama-3.3-70b-versatile"       # testing y QA
+MODEL_INFRA        = "llama-3.3-70b-versatile"       # infraestructura
+MODEL_SECURITY     = "llama-3.3-70b-versatile"       # seguridad
 
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
