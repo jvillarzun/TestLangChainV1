@@ -20,13 +20,13 @@ ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado
 GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado, no usado actualmente
 
 # Modelos por agente — todos Groq (cambiar aquí, no en los nodos)
-MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero
-MODEL_SPECKIT      = "llama-3.3-70b-versatile"
+MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"        # routing simple, modelo ligero
+MODEL_SPECKIT      = "llama-3.3-70b-versatile"    # plan maestro — requiere razonamiento complejo
 MODEL_PRD          = "llama-3.3-70b-versatile"
 MODEL_UX           = "llama-3.3-70b-versatile"
-MODEL_ARCHITECT    = "llama-3.3-70b-versatile"
-MODEL_DEV          = "llama-3.3-70b-versatile"
-MODEL_QA           = "llama-3.3-70b-versatile"
+MODEL_ARCHITECT    = "llama-3.3-70b-versatile"    # recibe PRD+UX acumulados — 8b se queda corto
+MODEL_DEV          = "llama-3.3-70b-versatile"    # recibe PRD+UX+ARCH — 128k context necesario
+MODEL_QA           = "llama-3.3-70b-versatile"    # recibe PRD+UX+ARCH+DEV
 MODEL_INFRA        = "llama-3.3-70b-versatile"
 MODEL_SECURITY     = "llama-3.3-70b-versatile"
 
@@ -67,5 +67,4 @@ SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
 # ── GitHub ───────────────────────────────────────────────────────────────
 GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "")
-REPO_BE_NAME    = os.environ.get("REPO_BE_NAME", "mach-backend-test-hackathon")
 REPO_FE_NAME    = os.environ.get("REPO_FE_NAME", "mach-frontend-test-hackathon")

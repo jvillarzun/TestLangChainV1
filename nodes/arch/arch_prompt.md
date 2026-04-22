@@ -27,10 +27,6 @@ Usas el modelo C4 y priorizas decisiones explícitas con ADRs.
 Analiza el código existente antes de proponer cambios.
 No propongas cambios que ignoren la estructura actual de los proyectos.
 
-### Backend — `{repo_be_name}`
-
-{be_context}
-
 ### Frontend — `{repo_fe_name}`
 
 {fe_context}

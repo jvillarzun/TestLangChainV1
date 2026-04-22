@@ -6,7 +6,82 @@ from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invok
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from tools.github_tools import create_branch_and_push, open_pull_request
-from config.settings import MODEL_DEV, REPO_BE_NAME, REPO_FE_NAME
+from config.settings import MODEL_DEV, REPO_FE_NAME
+
+_HTML_SKELETON = """\
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><!-- TÍTULO --></title>
+  <style>
+    /* Estilos mínimos aquí */
+  </style>
+</head>
+<body>
+  <!-- Contenido principal aquí -->
+  <script>
+    // Lógica JavaScript aquí
+  </script>
+</body>
+</html>
+```"""
+
+_REACT_SKELETON = """\
+```tsx
+import { useState } from 'react'
+
+export default function App() {
+  const [state, setState] = useState(null)
+
+  return (
+    <div>
+      {/* Componentes aquí */}
+    </div>
+  )
+}
+```"""
+
+_LAMBDA_SKELETON = """\
+```python
+import json
+
+def handler(event, context):
+    try:
+        body = json.loads(event.get('body', '{}'))
+        # Lógica aquí
+        return {'statusCode': 200, 'body': json.dumps({'ok': True})}
+    except Exception as e:
+        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+```"""
+
+_ANDROID_SKELETON = """\
+```kotlin
+@Composable
+fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    // UI aquí
+}
+```"""
+
+_KEYWORDS: list[tuple[list[str], str]] = [
+    (["html", "página", "pagina", "web estática", "landing", "static"], _HTML_SKELETON),
+    (["react", "next", "frontend", "tsx", "jsx"],                       _REACT_SKELETON),
+    (["android", "kotlin", "compose", "mobile"],                        _ANDROID_SKELETON),
+    (["lambda", "fastapi", "api rest", "backend", "endpoint"],          _LAMBDA_SKELETON),
+]
+
+
+def _pick_code_reference(challenge_description: str, instructions: str) -> str:
+    """Detecta tipo de output del challenge e inyecta skeleton relevante."""
+    text = (challenge_description + " " + instructions).lower()
+    for keywords, skeleton in _KEYWORDS:
+        if any(k in text for k in keywords):
+            return skeleton
+    return "Sin referencia de código base — genera desde cero según el ENGINEERING_PLAN."
+
 
 def _parse_generated_files(content: str) -> list[dict]:
     """
@@ -124,6 +199,9 @@ def run_dev_node(state: CycleState) -> dict:
     except Exception:
         _rag = None
 
+    _instructions = get_phase_instructions(state, "dev") or ""
+    _code_ref     = _pick_code_reference(state["challenge_description"], _instructions)
+
     system_prompt = load_prompt(
         "dev",
         challenge_name=state["challenge_name"],
@@ -133,10 +211,10 @@ def run_dev_node(state: CycleState) -> dict:
         arch_content=state.get("arch_content") or "",
         ux_content=state.get("ux_content") or "",
         github_plan=github_plan,
-        repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
         feedback=feedback or "Sin feedback previo.",
-        orchestrator_instructions=get_phase_instructions(state, "dev") or "Sin instrucciones adicionales.",
+        orchestrator_instructions=_instructions or "Sin instrucciones adicionales.",
+        code_reference=_code_ref,
     )
     if _rag:
         system_prompt += f"\n\n## Contexto de Knowledge Base (DEV):\n{_rag}"
@@ -164,23 +242,18 @@ def run_dev_node(state: CycleState) -> dict:
     pr_urls: list[str] = []
 
     if generated_files:
-        be_files = [f for f in generated_files if f.get("repo") == "backend"]
-        fe_files = [f for f in generated_files if f.get("repo") == "frontend"]
+        for gf in generated_files:
+            fpath = gf.get("path", "unknown")
+            fcontent = gf.get("content", "")
+            local_path = save_output(f"generated/{fpath}", fcontent)
+            print(f"   💾 Guardado local: {local_path}")
+
         challenge_name = state["challenge_name"]
-
-        if be_files:
-            print(f"   📦 Subiendo {len(be_files)} archivos a {REPO_BE_NAME}...")
-            pr = _push_files_and_open_pr(REPO_BE_NAME, branch, be_files, challenge_name, github_plan)
-            if pr:
-                pr_urls.append(pr)
-                print(f"   🔗 PR backend: {pr}")
-
-        if fe_files:
-            print(f"   📦 Subiendo {len(fe_files)} archivos a {REPO_FE_NAME}...")
-            pr = _push_files_and_open_pr(REPO_FE_NAME, branch, fe_files, challenge_name, github_plan)
-            if pr:
-                pr_urls.append(pr)
-                print(f"   🔗 PR frontend: {pr}")
+        print(f"   📦 Subiendo {len(generated_files)} archivos a {REPO_FE_NAME}...")
+        pr = _push_files_and_open_pr(REPO_FE_NAME, branch, generated_files, challenge_name, github_plan)
+        if pr:
+            pr_urls.append(pr)
+            print(f"   🔗 PR: {pr}")
     else:
         print("   ⚠️  GENERATED_FILES no encontrado — no se abrieron PRs")
 

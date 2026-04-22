@@ -7,7 +7,7 @@ from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
 from config.settings import MODEL_ARCHITECT
 from tools.github_tools import get_repo_context
-from config.settings import MODEL_ARCHITECT, REPO_BE_NAME, REPO_FE_NAME
+from config.settings import MODEL_ARCHITECT, REPO_FE_NAME
 
 def _format_context(ctx: dict) -> str:
     """Serializa el contexto de repo a texto para el prompt."""
@@ -42,11 +42,9 @@ def run_arch_node(state: CycleState) -> dict:
 
     # ── Obtener contexto de repos ────────────────────────────────────────────
     print("   🔍 Obteniendo contexto de repositorios GitHub...")
-    be_ctx = get_repo_context(REPO_BE_NAME)
     fe_ctx = get_repo_context(REPO_FE_NAME)
-    be_context = _format_context(be_ctx)
     fe_context = _format_context(fe_ctx)
-    print(f"   ✔ BE: {len(be_ctx['tree'])} archivos | FE: {len(fe_ctx['tree'])} archivos")
+    print(f"   ✔ FE: {len(fe_ctx['tree'])} archivos")
 
     try:
         from rag.rag_helper import get_rag_context
@@ -62,9 +60,7 @@ def run_arch_node(state: CycleState) -> dict:
         challenge_description=state["challenge_description"],
         prd_content=state.get("prd_content") or "",
         feedback=feedback or "Sin feedback previo.",
-        be_context=be_context,
         fe_context=fe_context,
-        repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
         orchestrator_instructions=get_phase_instructions(state, "arch") or "Sin instrucciones adicionales.",
     )

@@ -50,10 +50,13 @@ def load_prompt(agent: str, **kwargs) -> str:
 
 
 def create_llm(model: str) -> Any:
-    """Crea instancia LLM. Único lugar para cambiar proveedor (actualmente Groq)."""
+    """Crea instancia LLM. Único lugar para cambiar proveedor (actualmente Groq).
+    GROQ_MAX_TOKENS env var limita tokens por respuesta — útil para pruebas baratas."""
+    import os
     from langchain_groq import ChatGroq
     from config.settings import GROQ_API_KEY
-    return ChatGroq(model=model, api_key=GROQ_API_KEY)
+    max_tokens = int(os.environ.get("GROQ_MAX_TOKENS", 4096))
+    return ChatGroq(model=model, api_key=GROQ_API_KEY, max_tokens=max_tokens)
 
 
 def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str) -> tuple[str, dict]:
@@ -105,8 +108,8 @@ def get_phase_instructions(state: "CycleState", phase: str) -> str:
 
 
 def save_output(filename: str, content: str) -> Path:
-    """Guarda contenido en outputs/<filename>. Crea la carpeta si no existe."""
-    _OUTPUTS_DIR.mkdir(exist_ok=True)
+    """Guarda contenido en outputs/<filename>. Crea carpetas intermedias si no existen."""
     path = _OUTPUTS_DIR / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return path

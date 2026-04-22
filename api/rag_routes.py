@@ -190,7 +190,6 @@ def test_run_agent(agent: str, body: RunRequest):
                 qa_content="[test — no disponible]",
                 infra_content="[test — no disponible]",
                 github_plan="",
-                repo_be_name="",
                 repo_fe_name="",
                 feedback="Sin feedback previo.",
             )

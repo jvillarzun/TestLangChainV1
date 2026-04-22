@@ -34,8 +34,14 @@ Este es el plan que DEBES seguir al pie de la letra. Genera el código completo 
 {github_plan}
 ```
 
-Repositorio Backend: `{repo_be_name}`
-Repositorio Frontend: `{repo_fe_name}`
+Repositorio: `{repo_fe_name}` — todo el código va aquí, sin excepción.
+
+## Referencia de código base
+
+Usa este skeleton como punto de partida — complétalo y extiéndelo según el ENGINEERING_PLAN.
+No generes desde cero si ya tienes una estructura aquí.
+
+{code_reference}
 
 ## Feedback de revisión anterior (si aplica)
 
@@ -74,9 +80,9 @@ Este bloque será parseado automáticamente para hacer el commit en GitHub.
 {{
   "files": [
     {{
-      "repo": "backend",
+      "repo": "frontend",
       "path": "src/routes/example.js",
-      "content": "// Código completo del archivo\\nconst express = require('express');\\n..."
+      "content": "// Código completo del archivo\\n..."
     }},
     {{
       "repo": "frontend",
@@ -91,7 +97,7 @@ Este bloque será parseado automáticamente para hacer el commit en GitHub.
 - Incluir TODOS los archivos del ENGINEERING_PLAN, sin excepción
 - El campo `content` debe ser el código completo y funcional — no pseudocódigo ni placeholders
 - Escapar comillas dobles y saltos de línea dentro de `content` correctamente (JSON válido)
-- `repo` solo puede ser `"backend"` o `"frontend"`
+- `repo` siempre debe ser `"frontend"` — hay un solo repositorio destino
 - Las rutas en `path` deben coincidir exactamente con las del ENGINEERING_PLAN
 
 ## Reglas de output

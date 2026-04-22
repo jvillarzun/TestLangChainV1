@@ -10,7 +10,6 @@ Responsabilidades:
 
 Usa PyGithub. Requiere en .env:
   GITHUB_TOKEN, GITHUB_USERNAME,
-  REPO_BE_NAME (mach-backend-test-hackathon),
   REPO_FE_NAME (mach-frontend-test-hackathon)
 """
 
@@ -25,7 +24,6 @@ from github.Repository import Repository
 from config.settings import (
     GITHUB_TOKEN,
     GITHUB_USERNAME,
-    REPO_BE_NAME,
     REPO_FE_NAME,
 )
 
@@ -33,7 +31,6 @@ from config.settings import (
 print(f"🔑 [GitHub Init] Inicializando cliente GitHub...")
 print(f"🔑 [GitHub Init] Token presente: {'✓' if GITHUB_TOKEN else '✗ FALTA'}")
 print(f"🔑 [GitHub Init] Username: {GITHUB_USERNAME or '✗ FALTA'}")
-print(f"🔑 [GitHub Init] Repo BE: {REPO_BE_NAME}")
 print(f"🔑 [GitHub Init] Repo FE: {REPO_FE_NAME}")
 
 _gh = None
@@ -176,11 +173,11 @@ def create_branch_and_push(
         for idx, change in enumerate(changes, 1):
             path: str = change.get("path", "")
             content: str = change.get("content", "")
-            
+
             if not path:
                 print(f"❌ [GitHub] Archivo {idx}/{len(changes)}: SIN PATH - saltando")
                 continue
-            
+
             print(f"📝 [GitHub] Archivo {idx}/{len(changes)}: {path}")
             try:
                 print(f"   🔍 Verificando si existe en rama {branch_name}...")
@@ -210,7 +207,7 @@ def create_branch_and_push(
             except Exception as file_exc:
                 print(f"   ❌ ERROR al procesar {path}: {file_exc}")
                 raise
-            
+
             commit_sha = result["commit"].sha
             print(f"   📌 Commit SHA: {commit_sha[:8]}...")
 
