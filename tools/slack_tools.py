@@ -62,14 +62,14 @@ PHASE_HITL_CONFIG = {
     "qa": {
         "reviewer_role": "qa_lead",
         "label":         "QA sign-off pendiente",
-        "deliverable":   "QASCPECS.md",
+        "deliverable":   "QASPECS.md",
         "emoji":         "🧪",
         "instructions":  "Revisar que los 3 criterios críticos están PASS. Si hay blockers, rechazar con feedback.",
     },
     "infra": {
         "reviewer_role": "devops",
         "label":         "Infra lista para revisión",
-        "deliverable":   "INFESPEOS.md",
+        "deliverable":   "INFESPECS.md",
         "emoji":         "⚙️",
         "instructions":  "Verificar que el CDK stack es correcto y el pipeline CI/CD cubre los ambientes requeridos.",
     },

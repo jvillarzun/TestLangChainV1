@@ -36,7 +36,7 @@ def run_qa_node(state: CycleState) -> dict:
         notify_team(f"❌ QA-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
         return {"error_phase": "qa", "error_message": str(e), "qa_content": None, "qa_passed": None, "token_usage": []}
 
-    output_path = save_output("QASCPECS.md", qa_content)
+    output_path = save_output("QASPECS.md", qa_content)
     print(f"   💾 Guardado en {output_path}")
 
     content_lower = qa_content.lower()

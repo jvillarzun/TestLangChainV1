@@ -96,13 +96,13 @@ class CycleState(TypedDict):
     """URLs de todos los Pull Requests abiertos por el dev-agent (BE + FE)."""
 
     qa_content: Optional[str]
-    """Contenido completo del QASCPECS.md generado."""
+    """Contenido completo del QASPECS.md generado."""
 
     qa_passed: Optional[bool]
     """True si QA aprobó todos los criterios, False si encontró blockers."""
 
     infra_content: Optional[str]
-    """Contenido completo del INFESPEOS.md generado."""
+    """Contenido completo del INFESPECS.md generado."""
 
     security_content: Optional[str]
     """Contenido completo del DEVSECOPS.md generado."""
