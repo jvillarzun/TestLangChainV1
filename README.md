@@ -297,107 +297,371 @@ Para que Slack pueda enviar payloads a tu máquina local:
 # Windows: winget install Cloudflare.cloudflared
 
 # Levantar tunnel (automático con start_dev.sh)
-
-Acceso a los servicios:
-
-```text
-Backend API:   http://localhost:8000
-Frontend UI:   http://localhost:5173
-Logs en vivo:  docker-compose logs -f
+bash start_dev.sh
 ```
 
-Ver estado de los contenedores:
+Este script:
+1. Inicia `cloudflared tunnel`
+2. Captura la URL pública
+3. Actualiza `.env` con `WEBHOOK_BASE_URL`
+4. Levanta `uvicorn` en el puerto 8000
 
-```bash
-docker-compose ps
-docker-compose logs mach-frontend
+Configura en Slack App > Interactivity > Request URL:
 ```
-
-Detener:
-
-```bash
-docker-compose down
-```
-
-**Notas importantes para Docker:**
-
-- El archivo `.env` DEBE estar presente en la raíz del proyecto. Los contenedores lo leen en startup.
-- El frontend Vue.js se construye optimizado para producción con nginx.
-- El proxy `/api` y `/deliverables` del frontend apunta automáticamente a `mach-api:8000` dentro de Docker.
-- Para exponer el webhook a Slack, usa Cloudflare Tunnel o ngrok afuera del contenedor:
-
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
-
-Luego actualiza en `.env`:
-
-```env
-WEBHOOK_BASE_URL=https://tu-tunnel.trycloudflare.com
-```
-
-Y configura en Slack App > Interactivity > Request URL:
-
-```text
 https://tu-tunnel.trycloudflare.com/slack/interactive
 ```
 
-## Dashboard Streamlit (Legacy)
+---
 
-Para usar el dashboard Streamlit entre procesos necesitas persistencia real. Configura:
+## 🎮 Uso del Sistema
 
+### Iniciar un Ciclo ADLC
+
+#### Con Docker Compose
+
+```bash
+# 1. Levantar servicios
+podman compose up -d
+
+# 2. Acceder al dashboard
+# Abrir http://localhost:5173
+# Click en "New Cycle" → Ingresar challenge → Start
+
+# 3. Monitorear logs
+podman compose logs -f mach-api
+```
+
+#### Sin Docker (Local)
+
+```bash
+# Terminal 1: Webhook
+source .venv/bin/activate
+uvicorn api.slack_webhook:app --reload --port 8000
+
+# Terminal 2: Ciclo
+source .venv/bin/activate
+python main.py
+# Ingresa el challenge cuando se solicite
+```
+
+### Aprobar/Rechazar en Slack
+
+1. **Recibir notificación**: Llegarà un DM de Slack con el entregable
+2. **Revisar**: Click en "Ver Entregable" para abrir el archivo `.md`
+3. **Decidir**:
+   - **Approve**: El ciclo avanza a la siguiente fase
+   - **Reject**: Se abre modal para ingresar feedback → El agente regenera con el feedback
+
+### Ver Entregables
+
+**Dashboard Vue.js**: http://localhost:5173/deliverables
+
+**API Directa**:
+```bash
+curl http://localhost:8000/deliverables/
+curl http://localhost:8000/view/PRDSPECS.md
+```
+
+**Archivos locales**: Revisa la carpeta `outputs/`
+
+---
+
+## 🔧 Build Validation y Auto-Sanación
+
+El **Dev Agent** incluye un sistema de validación y auto-corrección:
+
+### Flujo de Validación
+
+1. **Generación de código**: El LLM genera archivos según el ENGINEERING_PLAN
+2. **Parser**: Extrae archivos del formato Markdown
+3. **Setup de repo**: Clona el repo de GitHub en `/tmp/repos/`
+4. **Escritura de archivos**: Crea/modifica archivos en el repo local
+5. **Limpieza**: Borra `.npmrc` del repo (evita registry privados)
+6. **Instalación**: `npm ci --registry=https://registry.npmjs.org/`
+7. **Build**: `npm run build`
+8. **Resultado**:
+   - ✅ **Build exitoso**: Crea Pull Request en GitHub
+   - ❌ **Build fallido**: Inyecta error en el prompt → LLM regenera código
+
+### Auto-Sanación (Self-Healing)
+
+Si el build falla:
+
+```python
+MAX_HEALING_ATTEMPTS = 3  # Máximo 3 reintentos
+```
+
+En cada reintento:
+1. Extrae el error de `npm run build`
+2. Crea un prompt con el error completo
+3. El LLM recibe contexto del error y regenera archivos
+4. Vuelve a validar
+
+**Ejemplo de feedback al LLM:**
+
+```
+❌ Build falló con código 1
+
+STDERR:
+Error: Module not found: Can't resolve './components/Header'
+  at src/app/page.tsx:3:0
+
+INSTRUCCIONES:
+- Verifica imports y exports
+- Asegúrate que todos los componentes existan
+- Usa rutas relativas correctas
+```
+
+### Deshabilitar Validación
+
+Si necesitas debugging rápido sin builds:
+
+```env
+ENABLE_BUILD_VALIDATION=false
+```
+
+---
+
+## 📊 Integración con Jira
+
+El orquestador sincroniza automáticamente con Jira:
+
+### Estructura de Tickets
+
+```
+Epic: "MACH-123 - [Challenge Title]"
+  ├─ Story: MACH-124 - PRD Specification
+  ├─ Story: MACH-125 - UX Design
+  ├─ Story: MACH-126 - Architecture Design
+  ├─ Task:  MACH-127 - Code Implementation
+  ├─ Task:  MACH-128 - QA Testing
+  ├─ Task:  MACH-129 - Infrastructure Setup
+  └─ Task:  MACH-130 - Security Audit
+```
+
+### Sincronización de Estado
+
+- **Fase inicia**: Ticket cambia a `In Progress`
+- **HITL Approve**: Ticket cambia a `Done`
+- **HITL Reject**: Ticket permanece en `In Progress`
+- **Ciclo completo**: Epic cambia a `Done`
+
+### Consultar Tickets
+
+Dashboard Vue.js incluye sección de Jira con:
+- Lista de tickets del ciclo actual
+- Estado de cada fase
+- Enlaces directos a Jira
+
+---
+
+## 🐛 Troubleshooting
+
+### Error: `npm error code E401`
+
+**Causa**: El repo clonado tiene `.npmrc` con registry privado
+
+**Solución**: Ya implementado en `build_validator.py`:
+```python
+# Borra .npmrc antes de npm ci
+if (repo_dir / ".npmrc").exists():
+    (repo_dir / ".npmrc").unlink()
+```
+
+Rebuild container:
+```bash
+podman compose down && podman compose build --no-cache mach-api && podman compose up -d
+```
+
+### Error: `Module not found: Can't resolve 'langchain_core.messages'`
+
+**Causa**: Pylance no encuentra imports (falso positivo)
+
+**Solución**: Ignora este error. El código funciona en runtime. Para silenciarlo:
+1. Abre VSCode Settings
+2. Busca `python.analysis.diagnosticMode`
+3. Cambia a `openFilesOnly`
+
+### Webhook no recibe payloads de Slack
+
+**Causa**: Slack no puede alcanzar tu localhost
+
+**Solución**: Usa Cloudflare Tunnel
+```bash
+bash start_dev.sh
+# Copia la URL y actualízala en Slack App > Interactivity
+```
+
+### Dashboard no muestra estado del ciclo
+
+**Causa**: `CHECKPOINTER=memory` no comparte estado entre procesos
+
+**Solución**: Cambia a SQLite
 ```env
 CHECKPOINTER=sqlite
 SQLITE_PATH=./mach_cycle.db
 ```
 
-Luego ejecútalo:
+Reinicia el backend.
+
+### Build falla con "Next.js swc dependencies"
+
+**Causa**: `package-lock.json` fue borrado (versión anterior del código)
+
+**Solución**: Ya fixed. La versión actual **NO borra** `package-lock.json`, solo `.npmrc`.
+
+---
+
+## 📚 Recursos y Referencias
+
+### Documentación Técnica
+
+- [CLAUDE.md](CLAUDE.md): Guía completa para Claude Code sobre el proyecto
+- [LangGraph Docs](https://langchain-ai.github.io/langgraph/): Framework de orquestación
+- [Slack Block Kit](https://api.slack.com/block-kit): Mensajes interactivos
+- [Jira REST API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/): Integración con Jira
+
+### Diagramas
+
+- `docs/diagrama_adlc.md`: Tabla de fases y responsabilidades
+- `docs/grafo_langgraph.png`: Visualización del StateGraph (generado automáticamente)
+
+### Generar Diagrama del Grafo
 
 ```bash
-source .venv/bin/activate
-streamlit run dashboard/app.py --server.port 8501
+python docs/export_graph.py
+# Genera docs/grafo_langgraph.png
 ```
 
-El dashboard permite:
+---
 
-- Consultar el estado por `thread_id`
-- Ver fase actual
-- Ver decisiones HITL
-- Ver entregables generados
-- Ver datos de Jira
+## 🤝 Contribución
 
-## Frontend Dashboard (Race Control)
+### Agregar un Nuevo Agente
 
-Nueva UI moderna construida con Vue.js 3, Vite y TailwindCSS.
+1. **Crear nodo**: `nodes/nombre/nombre_node.py`
+2. **Crear prompt**: `nodes/nombre/nombre_prompt.md`
+3. **Actualizar grafo**: Agregar nodos en `graph/mach_graph.py`
+4. **Actualizar estado**: Agregar campos necesarios en `state/cycle_state.py`
+5. **Testing**: Correr con `TEST_MODE=true` primero
 
-### Instalación
+### Modificar Prompts
+
+Los prompts son archivos `.md` editables sin tocar Python:
 
 ```bash
-cd frontend
-npm install
+nodes/prd/prd_prompt.md
+nodes/ux/ux_prompt.md
+nodes/arch/arch_prompt.md
+nodes/dev/dev_prompt.md
+# etc...
 ```
 
-### Desarrollo
+**Reglas importantes:**
+- Variables de Python: `{variable}` se reemplazan con `.format()`
+- Tipos TypeScript en ejemplos: Usar `{{{{ }}}}` para escapar
+  ```markdown
+  # ❌ Incorrecto (causa error de format)
+  const user: { name: string }
+  
+  # ✅ Correcto
+  const user: {{{{ name: string }}}}
+  ```
 
-```bash
-npm run dev
+### Agregar un Nuevo Proveedor LLM
+
+1. **Instalar cliente**: Agregar a `requirements.txt`
+   ```
+   langchain-anthropic>=0.3.0
+   ```
+
+2. **Actualizar `nodes/helper.py`**:
+   ```python
+   elif provider == "anthropic":
+       from langchain_anthropic import ChatAnthropic
+       from config.settings import ANTHROPIC_API_KEY
+       llm = ChatAnthropic(
+           model=model,
+           api_key=ANTHROPIC_API_KEY,
+           temperature=0.2,
+       )
+   ```
+
+3. **Agregar variables de entorno**:
+   ```env
+   ANTHROPIC_API_KEY=sk-ant-...
+   LLM_PROVIDER_ARCH=anthropic
+   LLM_MODEL_ARCH=claude-3-5-sonnet-20241022
+   ```
+
+---
+
+## 📄 Licencia
+
+Este proyecto es parte del **MACHBank Hackathon 2026** y está bajo licencia MIT.
+
+```
+MIT License
+
+Copyright (c) 2026 MACHBank - Hackathon Team
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
-Por defecto corre en `http://localhost:5173`
+---
 
-### Build para producción
+## 👥 Equipo
 
-```bash
-npm run build
-npm run preview
-```
+**MACH Race 2026 - Hackathon Team**
 
-### Características
+- Product Owner: [Nombre]
+- Tech Lead: [Nombre]
+- AI/ML Engineer: [Nombre]
+- DevOps: [Nombre]
 
-- **Race Track Visual**: Timeline animado mostrando progreso de fases
-- **Editor de Prompts**: Editar prompts de agentes en vivo
-- **New Cycle**: Interfaz para iniciar nuevos ciclos ADLC
-- **Estado en tiempo real**: Consume API del backend para mostrar estado del ciclo
+---
+
+## 🎯 Roadmap
+
+### Fase Actual (v1.0)
+- ✅ Frontend-Only architecture
+- ✅ Multi-provider LLM support (Gemini + OpenAI)
+- ✅ Build validation con auto-sanación
+- ✅ GitHub PR creation
+- ✅ Dashboard Vue.js
+
+### Próximas Funcionalidades (v2.0)
+- [ ] Soporte para Backend (Full-Stack architecture)
+- [ ] Claude Code Subprocess para Dev Agent real
+- [ ] Preview servers automáticos (Vercel/Netlify)
+- [ ] Observabilidad con LangSmith
+- [ ] Métricas de performance por agente
+- [ ] Tests E2E automatizados
+- [ ] Deploy automático post-aprobación
+
+---
+
+**¿Preguntas o Issues?** Abre un issue en GitHub o contacta al equipo vía Slack #mach-race-2026
+
+---
+
+_Construido con ❤️ durante el MACH Race 2026 Hackathon_
 - **Responsive**: Diseño adaptativo con TailwindCSS
 
 ### Requisitos
