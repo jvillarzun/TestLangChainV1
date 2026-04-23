@@ -80,6 +80,9 @@ class CycleState(TypedDict):
     prd_content: Optional[str]
     """Contenido completo del PRDSPECS.md generado."""
 
+    confluence_prd_url: Optional[str]
+    """URL de la página Confluence con el PRD Rationale."""
+
     ux_content: Optional[str]
     """Contenido completo del UXSPECS.md generado."""
 
@@ -213,6 +216,7 @@ def initial_state(
         current_phase="init",
         # Deliverables — vacíos hasta que cada agente corra
         prd_content=None,
+        confluence_prd_url=None,
         ux_content=None,
         arch_content=None,
         dev_content=None,
