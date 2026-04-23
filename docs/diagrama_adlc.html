@@ -126,6 +126,33 @@
     .bp-node { min-width: 200px; }
   }
 
+  /* ── Self-Healing ── */
+  .sh-container { max-width: 900px; margin: 0 auto; }
+  .sh-phase { position: relative; padding-left: 50px; margin-bottom: 0; }
+  .sh-phase::before { content: ''; position: absolute; left: 19px; top: 0; bottom: 0; width: 2px; }
+  .sh-phase:last-child::before { display: none; }
+  .sh-dot { position: absolute; left: 10px; top: 18px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7em; z-index: 1; }
+  .sh-box { border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid; position: relative; }
+  .sh-box h4 { font-size: 0.95em; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .sh-box p { font-size: 0.78em; color: #94A3B8; line-height: 1.6; }
+  .sh-box .sh-code { background: #0A0E1A; border: 1px solid #1F2937; border-radius: 8px; padding: 12px 16px; margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.7em; color: #94A3B8; overflow-x: auto; white-space: pre; }
+  .sh-box .sh-code .kw { color: #C084FC; }
+  .sh-box .sh-code .fn { color: #67E8F9; }
+  .sh-box .sh-code .str { color: #86EFAC; }
+  .sh-box .sh-code .cm { color: #475569; }
+  .sh-box .sh-code .err { color: #FCA5A5; }
+  .sh-box .sh-code .ok { color: #86EFAC; }
+  .sh-loop { border: 2px dashed #F59E0B; border-radius: 16px; padding: 20px; margin: 20px 0 20px 50px; position: relative; }
+  .sh-loop-label { position: absolute; top: -12px; left: 20px; background: #0B0F1A; padding: 0 10px; font-size: 0.7em; color: #F59E0B; font-weight: 600; }
+  .sh-metric { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 0.75em; margin: 4px; }
+  .sh-arrow-retry { position: absolute; right: -60px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .sh-arrow-retry .arr { color: #EF4444; font-size: 1.4em; animation: pulse-retry 2s infinite; }
+  @keyframes pulse-retry { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .sh-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 24px; }
+  .sh-stat { background: #111827; border: 1px solid #1F2937; border-radius: 12px; padding: 18px; text-align: center; }
+  .sh-stat .num { font-size: 1.8em; font-weight: 700; }
+  .sh-stat .label { font-size: 0.7em; color: #64748B; margin-top: 4px; }
+
   /* ── Footer ── */
   .footer { text-align: center; padding: 40px 20px; color: #334155; font-size: 0.75em; }
 
@@ -153,6 +180,7 @@
   <div class="tab" onclick="showTab('rag')">🧠 RAG & Knowledge</div>
   <div class="tab" onclick="showTab('possibilities')">🚀 Posibilidades</div>
   <div class="tab" onclick="showTab('blueprint')">📐 Blueprint</div>
+  <div class="tab" onclick="showTab('selfheal')">🔄 Self-Healing Dev</div>
 </div>
 </body>
 </html>
@@ -898,6 +926,209 @@
     </div>
 
   </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 7: SELF-HEALING DEV -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-selfheal">
+
+  <div style="text-align:center;margin-bottom:30px;">
+    <h2 style="font-size:1.4em;background:linear-gradient(135deg,#8B5CF6,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">💻 Dev Agent — Self-Healing Architecture</h2>
+    <p style="color:#64748B;font-size:0.85em;max-width:600px;margin:8px auto 0;">El agente detecta errores en su propio output, los diagnostica y se auto-corrige hasta 3 veces antes de entregar.</p>
+  </div>
+
+  <div class="sh-container">
+
+    <!-- Step 1: LLM Generation -->
+    <div class="sh-phase" style="padding-bottom:0;">
+      <div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#8B5CF6,#8B5CF6);"></div>
+      <div class="sh-dot" style="background:#2D1B4E;border:2px solid #8B5CF6;">1</div>
+      <div class="sh-box" style="border-color:#8B5CF6;background:#130D24;">
+        <h4><span style="font-size:1.2em;">🤖</span> LLM genera código</h4>
+        <p>El Dev Agent recibe PRD + UX + Arquitectura + ENGINEERING_PLAN + código actual del repo (GitHub) + RAG + Templates. Genera DEVSPECS.md con bloques <code>## FILE: repo/path</code>.</p>
+        <div class="sh-code"><span class="fn">llm_invoke</span>(
+  model=<span class="str">"gpt-4o-mini"</span>,
+  system_prompt=prompt + rag + templates + repo_context,
+  user_message=<span class="str">"Genera TODOS los archivos..."</span>
+)
+<span class="cm">→ dev_content: str (DEVSPECS.md + código)</span></div>
+      </div>
+    </div>
+
+    <!-- Step 2: Validator -->
+    <div class="sh-phase" style="padding-bottom:0;">
+      <div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#8B5CF6,#06B6D4);"></div>
+      <div class="sh-dot" style="background:#083344;border:2px solid #06B6D4;">2</div>
+      <div class="sh-box" style="border-color:#06B6D4;background:#0A1620;">
+        <h4><span style="font-size:1.2em;">🔎</span> Validador de calidad</h4>
+        <p>Escanea el output buscando señales de código incompleto o lazy. Si detecta problemas, notifica al equipo por Slack.</p>
+        <div class="sh-code"><span class="fn">validate_dev_output</span>(dev_content)
+
+<span class="cm"># Detecta:</span>
+<span class="err">❌ // TODO: implementar</span>
+<span class="err">❌ // tu lógica aquí</span>
+<span class="err">❌ raise NotImplementedError</span>
+<span class="err">❌ pass  # stub</span>
+<span class="err">❌ Archivos < 50 chars (vacíos)</span>
+<span class="err">❌ ... (ellipsis como cuerpo)</span>
+
+<span class="ok">✅ Código completo y funcional → continuar</span>
+<span class="err">❌ Errores encontrados → notificar equipo</span></div>
+      </div>
+    </div>
+
+    <!-- Step 3: Parser -->
+    <div class="sh-phase" style="padding-bottom:0;">
+      <div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#06B6D4,#F59E0B);"></div>
+      <div class="sh-dot" style="background:#1C1507;border:2px solid #F59E0B;">3</div>
+      <div class="sh-box" style="border-color:#F59E0B;background:#1A1508;">
+        <h4><span style="font-size:1.2em;">📦</span> Parser de archivos</h4>
+        <p>Extrae los archivos del output. Soporta formato nuevo (<code>## FILE:</code>) y legacy (JSON). Si no encuentra archivos, activa el self-healing.</p>
+        <div class="sh-code"><span class="fn">_parse_generated_files</span>(dev_content)
+
+<span class="cm"># Formato nuevo (preferido):</span>
+## FILE: frontend/src/App.tsx
+```tsx
+<span class="str">...código completo...</span>
+```
+
+<span class="cm"># Formato legacy (fallback):</span>
+```json
+{ <span class="str">"files"</span>: [{ <span class="str">"repo"</span>: ..., <span class="str">"path"</span>: ..., <span class="str">"content"</span>: ... }] }
+```
+
+<span class="ok">✅ Archivos encontrados → continuar</span>
+<span class="err">❌ 0 archivos → SELF-HEALING LOOP</span></div>
+      </div>
+    </div>
+
+    <!-- Self-Healing Loop -->
+    <div class="sh-loop">
+      <div class="sh-loop-label">🔄 SELF-HEALING LOOP — máx 3 intentos</div>
+
+      <div class="sh-phase" style="padding-bottom:0;">
+        <div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#EF4444,#EF4444);"></div>
+        <div class="sh-dot" style="background:#450A0A;border:2px solid #EF4444;">!</div>
+        <div class="sh-box" style="border-color:#EF4444;background:#1A0808;">
+          <h4><span style="font-size:1.2em;">🚨</span> Error detectado</h4>
+          <p>El parser no encontró archivos, o el build falló. El sistema diagnostica el tipo de error.</p>
+          <div class="sh-code"><span class="kw">if</span> <span class="fn">not</span> generated_files <span class="kw">and</span> len(content) > 100:
+    <span class="cm"># LLM ignoró el formato → error de formato</span>
+    error_type = <span class="str">"FORMAT_ERROR"</span>
+
+<span class="kw">elif</span> <span class="fn">not</span> fe_valid:
+    <span class="cm"># Build falló → error de compilación</span>
+    error_type = <span class="str">"BUILD_ERROR"</span></div>
+        </div>
+      </div>
+
+      <div class="sh-phase" style="padding-bottom:0;">
+        <div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#EF4444,#F59E0B);"></div>
+        <div class="sh-dot" style="background:#451A03;border:2px solid #F59E0B;">⟳</div>
+        <div class="sh-box" style="border-color:#F59E0B;background:#1C1507;">
+          <h4><span style="font-size:1.2em;">🔧</span> Feedback de error → Re-invocación LLM</h4>
+          <p>Construye un prompt con el error específico y re-invoca al LLM pidiendo corrección. El LLM recibe su output anterior + el error + instrucciones de corrección.</p>
+          <div class="sh-code"><span class="cm"># Error de formato:</span>
+healing_prompt = system_prompt + <span class="str">"""
+🚨 ERROR CRÍTICO DE FORMATO
+Tu respuesta NO siguió el formato requerido.
+Usa: ## FILE: repo/path seguido de bloque de código.
+GENERA NUEVAMENTE TODOS LOS ARCHIVOS.
+"""</span>
+
+<span class="cm"># Error de build:</span>
+healing_prompt = system_prompt + <span class="str">f"""
+🚨 ERRORES DE COMPILACIÓN
+```
+{fe_error[:1000]}
+```
+Corrige TODOS los archivos afectados.
+"""</span>
+
+<span class="cm"># Re-invocar LLM con feedback</span>
+response = <span class="fn">create_llm</span>(MODEL_DEV).<span class="fn">invoke</span>([
+    SystemMessage(content=healing_prompt),
+    HumanMessage(content=<span class="str">"Corrige y genera nuevamente..."</span>)
+])
+<span class="fn">save_output</span>(<span class="str">f"DEVSPECS_healing_{attempt}.md"</span>, response)</div>
+        </div>
+      </div>
+
+      <div class="sh-phase">
+        <div class="sh-dot" style="background:#052E16;border:2px solid #10B981;">✓</div>
+        <div class="sh-box" style="border-color:#10B981;background:#051A0A;">
+          <h4><span style="font-size:1.2em;">✅</span> Re-validación</h4>
+          <p>El nuevo output pasa por el parser y validador de nuevo. Si pasa → continúa. Si falla → otro intento (máx 3).</p>
+          <div class="sh-code"><span class="cm"># Vuelve al inicio del loop</span>
+<span class="kw">for</span> attempt <span class="kw">in</span> range(1, MAX_HEALING_ATTEMPTS + 1):
+    generated_files = <span class="fn">_parse_generated_files</span>(current_content)
+    <span class="kw">if</span> generated_files <span class="kw">and</span> fe_valid:
+        <span class="ok">✅ Build OK en intento {attempt}!</span>
+        <span class="kw">break</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Push -->
+    <div class="sh-phase" style="padding-bottom:0;">
+      <div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#10B981,#10B981);"></div>
+      <div class="sh-dot" style="background:#052E16;border:2px solid #10B981;">4</div>
+      <div class="sh-box" style="border-color:#10B981;background:#051A0A;">
+        <h4><span style="font-size:1.2em;">🐙</span> Push a GitHub + PR</h4>
+        <p>Los archivos validados se suben al repo. Se crea branch <code>feat/adlc-{thread_id}</code> y se abre Pull Request automáticamente.</p>
+        <div class="sh-code"><span class="fn">create_branch_and_push</span>(
+    repo_name=REPO_FE_NAME,
+    branch_name=<span class="str">f"feat/adlc-{thread_id[:8]}"</span>,
+    changes=files,
+    commit_message=<span class="str">f"feat({challenge}): ADLC auto-generated"</span>
+)
+<span class="fn">open_pull_request</span>(repo_name, branch, title, body)
+<span class="ok">→ PR URL: https://github.com/.../pull/N</span></div>
+      </div>
+    </div>
+
+    <!-- Step 5: HITL -->
+    <div class="sh-phase">
+      <div class="sh-dot" style="background:#1C1507;border:2px solid #F59E0B;">5</div>
+      <div class="sh-box" style="border-color:#F59E0B;background:#1A1508;">
+        <h4><span style="font-size:1.2em;">⏸</span> HITL — Aprobación humana</h4>
+        <p>El Dev Lead recibe DM en Slack con el DEVSPECS + links a los PRs. Puede aprobar (avanza a QA) o rechazar con feedback (el Dev Agent re-ejecuta completo con el feedback inyectado).</p>
+        <div class="sh-code"><span class="cm"># Approve → current_phase = "qa" → run_qa</span>
+<span class="cm"># Reject  → current_phase = "dev" → run_dev (con feedback)</span>
+
+<span class="fn">interrupt</span>()  <span class="cm"># Pausa el grafo</span>
+<span class="cm"># ... humano decide en Slack o Frontend ...</span>
+resume_payload = { <span class="str">"decision"</span>: <span class="str">"approve"</span> | <span class="str">"reject"</span> }</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Stats -->
+  <div class="sh-stats">
+    <div class="sh-stat">
+      <div class="num" style="color:#8B5CF6;">3</div>
+      <div class="label">Capas de validación<br><span style="color:#475569;">Validator + Parser + Build</span></div>
+    </div>
+    <div class="sh-stat">
+      <div class="num" style="color:#F59E0B;">3</div>
+      <div class="label">Intentos de auto-corrección<br><span style="color:#475569;">Antes de entregar al humano</span></div>
+    </div>
+    <div class="sh-stat">
+      <div class="num" style="color:#06B6D4;">12</div>
+      <div class="label">Patrones lazy detectados<br><span style="color:#475569;">TODO, FIXME, stubs, ellipsis...</span></div>
+    </div>
+    <div class="sh-stat">
+      <div class="num" style="color:#10B981;">2</div>
+      <div class="label">Formatos de output<br><span style="color:#475569;">## FILE: + JSON legacy</span></div>
+    </div>
+    <div class="sh-stat">
+      <div class="num" style="color:#EC4899;">∞</div>
+      <div class="label">Reintentos HITL<br><span style="color:#475569;">Humano puede rechazar N veces</span></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════ -->
