@@ -137,8 +137,8 @@ def orchestrator_init_node(state: CycleState) -> dict:
                 {"phase": "ux",       "agent": "ux-agent",        "model": "stub", "depends_on": ["prd"],         "instructions": "Diseña la experiencia de usuario basada en el PRD.", "key_outputs": ["UXSPECS.md"]},
                 {"phase": "arch",     "agent": "architect-agent", "model": "stub", "depends_on": ["prd"],         "instructions": "Define la arquitectura técnica del sistema.", "key_outputs": ["ARQSPECS.md"]},
                 {"phase": "dev",      "agent": "dev-agent",       "model": "stub", "depends_on": ["prd", "arch"], "instructions": "Implementa el código según PRD y arquitectura.", "key_outputs": ["DEVSPECS.md"]},
-                {"phase": "qa",       "agent": "qa-agent",        "model": "stub", "depends_on": ["dev"],         "instructions": "Valida la implementación contra criterios del PRD.", "key_outputs": ["QASCPECS.md"]},
-                {"phase": "infra",    "agent": "infra-agent",     "model": "stub", "depends_on": ["qa"],          "instructions": "Define infraestructura cloud y CI/CD.", "key_outputs": ["INFESPEOS.md"]},
+                {"phase": "qa",       "agent": "qa-agent",        "model": "stub", "depends_on": ["dev"],         "instructions": "Valida la implementación contra criterios del PRD.", "key_outputs": ["QASPECS.md"]},
+                {"phase": "infra",    "agent": "infra-agent",     "model": "stub", "depends_on": ["qa"],          "instructions": "Define infraestructura cloud y CI/CD.", "key_outputs": ["INFESPECS.md"]},
                 {"phase": "security", "agent": "security-agent",  "model": "stub", "depends_on": ["qa"],          "instructions": "Audita seguridad OWASP Top 10 y DevSecOps.", "key_outputs": ["DEVSECOPS.md"]},
             ],
             "success_metrics": {"prd": "stub", "ux_arch": "stub", "dev": "stub", "qa": "stub", "infra_sec": "stub"},
@@ -295,8 +295,8 @@ def _build_report(state: CycleState, approvals: int, rejections: int, duration: 
         ("UX",    "UXSPECS.md",    state.get("ux_content")),
         ("ARQ",   "ARQSPECS.md",   state.get("arch_content")),
         ("DEV",   "DEVSPECS.md",   state.get("dev_content")),
-        ("QA",    "QASCPECS.md",   state.get("qa_content")),
-        ("INFRA", "INFESPEOS.md",  state.get("infra_content")),
+        ("QA",    "QASPECS.md",   state.get("qa_content")),
+        ("INFRA", "INFESPECS.md",  state.get("infra_content")),
         ("SEC",   "DEVSECOPS.md",  state.get("security_content")),
     ]
 

@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MACH Race 2026 — Arquitectura ADLC Agéntica</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #0B0F1A; color: #E2E8F0; overflow-x: hidden; }
+
+  /* ── Header ── */
+  .header { text-align: center; padding: 40px 20px 20px; }
+  .header h1 { font-size: 2.2em; background: linear-gradient(135deg, #A78BFA, #7C3AED, #EC4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+  .header p { color: #94A3B8; font-size: 0.95em; max-width: 700px; margin: 0 auto; }
+  .badge { display: inline-block; background: #1E1B4B; color: #A78BFA; font-size: 0.7em; padding: 4px 12px; border-radius: 20px; margin-top: 12px; border: 1px solid #312E81; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; justify-content: center; gap: 8px; margin: 30px 0 20px; flex-wrap: wrap; padding: 0 20px; }
+  .tab { padding: 10px 20px; border-radius: 10px; border: 1px solid #334155; background: #1E293B; color: #94A3B8; cursor: pointer; font-size: 0.85em; transition: all 0.2s; }
+  .tab:hover { border-color: #7C3AED; color: #C4B5FD; }
+  .tab.active { background: #7C3AED; border-color: #7C3AED; color: white; }
+
+  /* ── Panels ── */
+  .panel { display: none; max-width: 1200px; margin: 0 auto; padding: 0 20px 60px; }
+  .panel.active { display: block; }
+
+  /* ── Flow Diagram ── */
+  .flow { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding: 20px 0 40px; justify-content: center; flex-wrap: wrap; }
+  .agent-card { width: 140px; flex-shrink: 0; text-align: center; position: relative; }
+  .agent-icon { width: 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 1.8em; margin: 0 auto 10px; border: 2px solid; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+  .agent-icon:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(124, 58, 237, 0.4); }
+  .agent-name { font-size: 0.8em; font-weight: 600; color: #E2E8F0; }
+  .agent-role { font-size: 0.65em; color: #64748B; margin-top: 2px; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: #475569; font-size: 1.2em; padding: 0 4px; margin-top: 20px; }
+  .hitl-dot { width: 8px; height: 8px; border-radius: 50%; background: #F59E0B; margin: 8px auto 0; }
+  .hitl-label { font-size: 0.55em; color: #F59E0B; margin-top: 2px; }
+
+  /* Colors per agent */
+  .c-orch { background: #1E1B4B; border-color: #7C3AED; }
+  .c-prd  { background: #1E3A5F; border-color: #3B82F6; }
+  .c-ux   { background: #3B1F2B; border-color: #EC4899; }
+  .c-arch { background: #1A2E1A; border-color: #10B981; }
+  .c-dev  { background: #2D1B4E; border-color: #8B5CF6; }
+  .c-qa   { background: #1B2D3A; border-color: #06B6D4; }
+  .c-infra{ background: #2A2215; border-color: #F59E0B; }
+  .c-sec  { background: #2D1515; border-color: #EF4444; }
+
+  /* ── Agent Detail ── */
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; margin-top: 20px; }
+  .detail-card { background: #111827; border: 1px solid #1F2937; border-radius: 16px; padding: 24px; transition: border-color 0.2s; }
+  .detail-card:hover { border-color: #7C3AED; }
+  .detail-card h3 { font-size: 1.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+  .detail-card h3 span { font-size: 1.4em; }
+  .tag { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 0.7em; margin: 2px; }
+  .tag-purple { background: #2E1065; color: #C4B5FD; }
+  .tag-blue   { background: #172554; color: #93C5FD; }
+  .tag-green  { background: #052E16; color: #86EFAC; }
+  .tag-pink   { background: #4A0D2E; color: #F9A8D4; }
+  .tag-amber  { background: #451A03; color: #FCD34D; }
+  .tag-cyan   { background: #083344; color: #67E8F9; }
+  .tag-red    { background: #450A0A; color: #FCA5A5; }
+  .input-list { margin-top: 12px; }
+  .input-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.8em; color: #94A3B8; border-bottom: 1px solid #1F2937; }
+  .input-item:last-child { border-bottom: none; }
+  .input-icon { font-size: 1em; width: 20px; text-align: center; }
+  .section-title { font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px; color: #64748B; margin: 16px 0 8px; font-weight: 600; }
+
+  /* ── Specialists ── */
+  .spec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+  .spec-card { background: #111827; border: 1px solid #1F2937; border-radius: 14px; padding: 20px; }
+  .spec-card h4 { font-size: 0.95em; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .spec-card p { font-size: 0.78em; color: #64748B; margin-bottom: 12px; }
+  .spec-stack { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  /* ── RAG Layer ── */
+  .rag-section { background: linear-gradient(135deg, #0F172A, #1E1B4B); border: 1px solid #312E81; border-radius: 16px; padding: 28px; margin-top: 30px; }
+  .rag-section h3 { font-size: 1.1em; margin-bottom: 16px; }
+  .rag-flow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .rag-node { background: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 14px 18px; text-align: center; min-width: 120px; }
+  .rag-node .icon { font-size: 1.5em; margin-bottom: 4px; }
+  .rag-node .label { font-size: 0.75em; color: #94A3B8; }
+  .rag-arrow { color: #7C3AED; font-size: 1.2em; }
+
+  /* ── Possibilities ── */
+  .poss-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
+  .poss-card { background: #111827; border: 1px solid #1F2937; border-radius: 14px; padding: 22px; position: relative; overflow: hidden; }
+  .poss-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .poss-card.p1::before { background: linear-gradient(90deg, #7C3AED, #EC4899); }
+  .poss-card.p2::before { background: linear-gradient(90deg, #10B981, #06B6D4); }
+  .poss-card.p3::before { background: linear-gradient(90deg, #F59E0B, #EF4444); }
+  .poss-card.p4::before { background: linear-gradient(90deg, #3B82F6, #8B5CF6); }
+  .poss-card h4 { font-size: 0.95em; margin-bottom: 8px; }
+  .poss-card p { font-size: 0.78em; color: #94A3B8; line-height: 1.5; }
+  .poss-tag { display: inline-block; font-size: 0.65em; padding: 2px 8px; border-radius: 4px; background: #1E293B; color: #64748B; margin-top: 10px; }
+
+  /* ── Footer ── */
+  .footer { text-align: center; padding: 40px 20px; color: #334155; font-size: 0.75em; }
+
+  @media (max-width: 768px) {
+    .flow { flex-direction: column; align-items: center; }
+    .arrow { transform: rotate(90deg); padding: 4px 0; margin-top: 0; }
+    .header h1 { font-size: 1.6em; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="header">
+  <h1>MACH Race 2026</h1>
+  <p>Arquitectura Agéntica del Ciclo ADLC — Orquestación multi-agente con LangGraph, RAG por especialidad y Human-in-the-Loop</p>
+  <div class="badge">LangGraph · FastAPI · Groq · OpenAI · Gemini · ChromaDB · Slack · Jira · GitHub</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="tabs">
+  <div class="tab active" onclick="showTab('flow')">🔄 Flujo ADLC</div>
+  <div class="tab" onclick="showTab('agents')">🤖 Agentes</div>
+  <div class="tab" onclick="showTab('specialists')">⚡ Especialistas</div>
+  <div class="tab" onclick="showTab('rag')">🧠 RAG & Knowledge</div>
+  <div class="tab" onclick="showTab('possibilities')">🚀 Posibilidades</div>
+</div>
+</body>
+</html>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 1: FLUJO ADLC -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel active" id="panel-flow">
+
+  <div class="flow">
+    <div class="agent-card">
+      <div class="agent-icon c-orch">🎯</div>
+      <div class="agent-name">Orquestador</div>
+      <div class="agent-role">Plan & Routing</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon c-prd">📋</div>
+      <div class="agent-name">PRD Agent</div>
+      <div class="agent-role">Product Owner</div>
+      <div class="hitl-dot"></div>
+      <div class="hitl-label">HITL</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon c-ux">🎨</div>
+      <div class="agent-name">UX Agent</div>
+      <div class="agent-role">Diseño UX/UI</div>
+      <div class="hitl-dot"></div>
+      <div class="hitl-label">HITL</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon c-arch">🏛️</div>
+      <div class="agent-name">Architect</div>
+      <div class="agent-role">Diseño Técnico</div>
+      <div class="hitl-dot"></div>
+      <div class="hitl-label">HITL</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon c-dev">💻</div>
+      <div class="agent-name">Dev Agent</div>
+      <div class="agent-role">Implementación</div>
+      <div class="hitl-dot"></div>
+      <div class="hitl-label">HITL</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon c-qa">🧪</div>
+      <div class="agent-name">QA Agent</div>
+      <div class="agent-role">Testing</div>
+      <div class="hitl-dot"></div>
+      <div class="hitl-label">HITL</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon c-infra">☁️</div>
+      <div class="agent-name">Infra Agent</div>
+      <div class="agent-role">Cloud & CI/CD</div>
+      <div class="hitl-dot"></div>
+      <div class="hitl-label">HITL</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon c-sec">🔒</div>
+      <div class="agent-name">Security</div>
+      <div class="agent-role">DevSecOps</div>
+      <div class="hitl-dot"></div>
+      <div class="hitl-label">HITL</div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="agent-card">
+      <div class="agent-icon" style="background:#064E3B;border-color:#10B981;">✅</div>
+      <div class="agent-name">DONE</div>
+      <div class="agent-role">Ciclo Completo</div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-top:10px;">
+    <div style="display:flex;align-items:center;gap:6px;font-size:0.75em;color:#94A3B8;">
+      <div style="width:10px;height:10px;border-radius:50%;background:#F59E0B;"></div> Human-in-the-Loop (Slack / Frontend)
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:0.75em;color:#94A3B8;">
+      <div style="width:10px;height:10px;border-radius:3px;background:#7C3AED;"></div> Agente LLM
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:0.75em;color:#94A3B8;">
+      → Approve avanza · Reject vuelve al mismo agente con feedback
+    </div>
+  </div>
+
+  <!-- Architecture boxes -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:36px;">
+    <div style="background:#111827;border:1px solid #1F2937;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.6em;margin-bottom:6px;">🧠</div>
+      <div style="font-size:0.85em;font-weight:600;">LangGraph</div>
+      <div style="font-size:0.7em;color:#64748B;margin-top:4px;">StateGraph + Checkpoints<br>Persistencia SQLite</div>
+    </div>
+    <div style="background:#111827;border:1px solid #1F2937;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.6em;margin-bottom:6px;">📱</div>
+      <div style="font-size:0.85em;font-weight:600;">Slack HITL</div>
+      <div style="font-size:0.7em;color:#64748B;margin-top:4px;">DM con botones<br>Modal de feedback</div>
+    </div>
+    <div style="background:#111827;border:1px solid #1F2937;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.6em;margin-bottom:6px;">🎫</div>
+      <div style="font-size:0.85em;font-weight:600;">Jira Tracking</div>
+      <div style="font-size:0.7em;color:#64748B;margin-top:4px;">Epic + Stories<br>Auto-creación por fase</div>
+    </div>
+    <div style="background:#111827;border:1px solid #1F2937;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.6em;margin-bottom:6px;">🐙</div>
+      <div style="font-size:0.85em;font-weight:600;">GitHub PRs</div>
+      <div style="font-size:0.7em;color:#64748B;margin-top:4px;">Branch + Push + PR<br>Auto-generado por Dev</div>
+    </div>
+    <div style="background:#111827;border:1px solid #1F2937;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.6em;margin-bottom:6px;">📚</div>
+      <div style="font-size:0.85em;font-weight:600;">RAG por Agente</div>
+      <div style="font-size:0.7em;color:#64748B;margin-top:4px;">ChromaDB + Templates<br>Knowledge Base dedicada</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 2: AGENTES -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-agents">
+  <div class="detail-grid">
+
+    <div class="detail-card">
+      <h3><span>🎯</span> Orquestador</h3>
+      <div><span class="tag tag-purple">llama-3.1-8b-instant</span> <span class="tag tag-blue">Groq</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Genera el plan de fases, asigna agentes, controla routing post-HITL. Decide si avanzar o reintentar.</div>
+      <div class="section-title">Inputs</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📝</span> Challenge (nombre, tipo, descripción, criterios)</div>
+        <div class="input-item"><span class="input-icon">⚙️</span> Prompt editable: orchestrator_prompt.md</div>
+      </div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📋</span> plan_phases[] con instrucciones por agente</div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3><span>📋</span> PRD Agent</h3>
+      <div><span class="tag tag-purple">llama-3.3-70b</span> <span class="tag tag-blue">Groq</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Genera especificaciones de producto completas. Define alcance, criterios de aceptación, user stories.</div>
+      <div class="section-title">Inputs</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📝</span> Challenge del PO</div>
+        <div class="input-item"><span class="input-icon">📚</span> RAG: Knowledge Base PRD</div>
+        <div class="input-item"><span class="input-icon">⚙️</span> Prompt: prd_prompt.md</div>
+        <div class="input-item"><span class="input-icon">💬</span> Feedback HITL (si rechazado)</div>
+      </div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📄</span> PRDSPECS.md</div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3><span>🎨</span> UX Agent</h3>
+      <div><span class="tag tag-purple">llama-3.3-70b</span> <span class="tag tag-blue">Groq</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Diseña experiencia de usuario, flujos, wireframes, design system. Basado en el PRD aprobado.</div>
+      <div class="section-title">Inputs</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📋</span> PRD aprobado</div>
+        <div class="input-item"><span class="input-icon">📚</span> RAG: Design Systems, Guidelines</div>
+        <div class="input-item"><span class="input-icon">🎨</span> Templates: hackathon-ds-V2.md</div>
+        <div class="input-item"><span class="input-icon">⚙️</span> Prompt: ux_prompt.md</div>
+      </div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📄</span> UXSPECS.md</div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3><span>🏛️</span> Architect Agent</h3>
+      <div><span class="tag tag-green">gemini-2.5-flash</span> <span class="tag tag-blue">Google</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Define arquitectura técnica, lee repos reales de GitHub, genera ENGINEERING_PLAN con pasos concretos.</div>
+      <div class="section-title">Inputs</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📋</span> PRD aprobado</div>
+        <div class="input-item"><span class="input-icon">🐙</span> Código actual del repo (GitHub API)</div>
+        <div class="input-item"><span class="input-icon">📚</span> RAG: Architecture patterns, System design</div>
+        <div class="input-item"><span class="input-icon">⚙️</span> Prompt: arch_prompt.md</div>
+      </div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📄</span> ARQSPECS.md + ENGINEERING_PLAN (JSON)</div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3><span>💻</span> Dev Agent</h3>
+      <div><span class="tag tag-purple">gpt-4o-mini</span> <span class="tag tag-pink">OpenAI</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Implementa código real siguiendo el ENGINEERING_PLAN. Abre PRs en GitHub. Self-healing loop si el build falla.</div>
+      <div class="section-title">Inputs</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📋</span> PRD + UX + Arquitectura aprobados</div>
+        <div class="input-item"><span class="input-icon">📐</span> ENGINEERING_PLAN del Arquitecto</div>
+        <div class="input-item"><span class="input-icon">🐙</span> Código actual del repo (GitHub API)</div>
+        <div class="input-item"><span class="input-icon">📚</span> RAG: Patterns, Guidelines por stack</div>
+        <div class="input-item"><span class="input-icon">🎨</span> Templates: HTML/CSS, Screen templates</div>
+        <div class="input-item"><span class="input-icon">⚙️</span> Prompt: dev_prompt.md</div>
+      </div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📄</span> DEVSPECS.md + Código completo</div>
+        <div class="input-item"><span class="input-icon">🔗</span> Pull Requests en GitHub</div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3><span>🧪</span> QA Agent</h3>
+      <div><span class="tag tag-purple">llama-3.3-70b</span> <span class="tag tag-blue">Groq</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Valida implementación contra criterios del PRD. Genera plan de testing, casos de prueba, reportes.</div>
+      <div class="section-title">Inputs</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📋</span> PRD + DEVSPECS</div>
+        <div class="input-item"><span class="input-icon">📚</span> RAG: Testing patterns</div>
+        <div class="input-item"><span class="input-icon">⚙️</span> Prompt: qa_prompt.md</div>
+      </div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📄</span> QASPECS.md + qa_passed flag</div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3><span>☁️</span> Infra Agent</h3>
+      <div><span class="tag tag-purple">llama-3.3-70b</span> <span class="tag tag-blue">Groq</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Define infraestructura cloud, CI/CD pipelines, monitoring, escalabilidad.</div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📄</span> INFESPEOS.md</div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3><span>🔒</span> Security Agent</h3>
+      <div><span class="tag tag-purple">llama-3.3-70b</span> <span class="tag tag-blue">Groq</span></div>
+      <div class="section-title">Función</div>
+      <div style="font-size:0.8em;color:#94A3B8;">Auditoría OWASP Top 10, DevSecOps, análisis de vulnerabilidades, recomendaciones de hardening.</div>
+      <div class="section-title">Output</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📄</span> DEVSECOPS.md</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 3: ESPECIALISTAS -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-specialists">
+  <p style="color:#94A3B8;font-size:0.9em;margin-bottom:8px;">Cada agente puede tener sub-especialistas según el stack del proyecto. El RAG y los templates se adaptan automáticamente.</p>
+
+  <h3 style="margin:24px 0 12px;font-size:1em;">💻 Dev Agent — Especialistas</h3>
+  <div class="spec-grid">
+    <div class="spec-card">
+      <h4>🌐 Web Frontend</h4>
+      <p>SPAs, landing pages, dashboards. HTML/CSS/JS production-ready.</p>
+      <div class="spec-stack">
+        <span class="tag tag-blue">React</span>
+        <span class="tag tag-green">Vue.js</span>
+        <span class="tag tag-purple">Next.js</span>
+        <span class="tag tag-cyan">TailwindCSS</span>
+        <span class="tag tag-amber">Svelte</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>📱 Mobile — Android</h4>
+      <p>Apps nativas Android con Jetpack Compose y Material 3.</p>
+      <div class="spec-stack">
+        <span class="tag tag-green">Kotlin</span>
+        <span class="tag tag-blue">Jetpack Compose</span>
+        <span class="tag tag-purple">Material 3</span>
+        <span class="tag tag-amber">MVVM</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>🍎 Mobile — iOS</h4>
+      <p>Apps nativas iOS con SwiftUI y patrones modernos.</p>
+      <div class="spec-stack">
+        <span class="tag tag-blue">Swift</span>
+        <span class="tag tag-purple">SwiftUI</span>
+        <span class="tag tag-cyan">Combine</span>
+        <span class="tag tag-green">MVVM</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>📱 Mobile — Cross-platform</h4>
+      <p>Apps multiplataforma con un solo codebase.</p>
+      <div class="spec-stack">
+        <span class="tag tag-cyan">Flutter</span>
+        <span class="tag tag-blue">React Native</span>
+        <span class="tag tag-purple">Dart</span>
+        <span class="tag tag-green">Expo</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>⚙️ Backend API</h4>
+      <p>APIs REST/GraphQL, microservicios, serverless.</p>
+      <div class="spec-stack">
+        <span class="tag tag-green">Python/FastAPI</span>
+        <span class="tag tag-blue">Node.js/Express</span>
+        <span class="tag tag-amber">Go</span>
+        <span class="tag tag-red">Java/Spring</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>🗄️ Data & ML</h4>
+      <p>Pipelines de datos, modelos ML, ETL.</p>
+      <div class="spec-stack">
+        <span class="tag tag-purple">Python</span>
+        <span class="tag tag-blue">Pandas</span>
+        <span class="tag tag-green">TensorFlow</span>
+        <span class="tag tag-amber">SQL</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin:30px 0 12px;font-size:1em;">🏛️ Architect Agent — Especialistas</h3>
+  <div class="spec-grid">
+    <div class="spec-card">
+      <h4>☁️ Cloud Native</h4>
+      <p>Arquitecturas serverless, containers, microservicios en cloud.</p>
+      <div class="spec-stack">
+        <span class="tag tag-amber">AWS</span>
+        <span class="tag tag-blue">GCP</span>
+        <span class="tag tag-cyan">Azure</span>
+        <span class="tag tag-purple">Kubernetes</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>📱 Mobile Architecture</h4>
+      <p>Patrones de arquitectura para apps móviles nativas y cross-platform.</p>
+      <div class="spec-stack">
+        <span class="tag tag-green">Clean Arch</span>
+        <span class="tag tag-blue">MVVM</span>
+        <span class="tag tag-purple">MVI</span>
+        <span class="tag tag-amber">Repository</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>🔗 Event-Driven</h4>
+      <p>Sistemas distribuidos, event sourcing, CQRS.</p>
+      <div class="spec-stack">
+        <span class="tag tag-red">Kafka</span>
+        <span class="tag tag-blue">RabbitMQ</span>
+        <span class="tag tag-green">EventBridge</span>
+        <span class="tag tag-purple">CQRS</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin:30px 0 12px;font-size:1em;">🎨 UX Agent — Especialistas</h3>
+  <div class="spec-grid">
+    <div class="spec-card">
+      <h4>📱 Mobile UX</h4>
+      <p>Patrones de navegación, gestos, design systems móviles.</p>
+      <div class="spec-stack">
+        <span class="tag tag-blue">Material 3</span>
+        <span class="tag tag-purple">HIG (Apple)</span>
+        <span class="tag tag-green">Fluent</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>🌐 Web UX</h4>
+      <p>Responsive design, accesibilidad, performance percibido.</p>
+      <div class="spec-stack">
+        <span class="tag tag-cyan">WCAG 2.1</span>
+        <span class="tag tag-amber">Core Web Vitals</span>
+        <span class="tag tag-pink">Figma Tokens</span>
+      </div>
+    </div>
+    <div class="spec-card">
+      <h4>💰 Fintech UX</h4>
+      <p>Patrones específicos de banca, pagos, onboarding financiero.</p>
+      <div class="spec-stack">
+        <span class="tag tag-green">Trust Patterns</span>
+        <span class="tag tag-blue">KYC Flows</span>
+        <span class="tag tag-purple">Dashboard Finance</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 4: RAG & KNOWLEDGE -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-rag">
+
+  <div class="rag-section">
+    <h3>🧠 Flujo RAG — Cómo cada agente accede al conocimiento</h3>
+    <div class="rag-flow" style="margin-top:20px;">
+      <div class="rag-node">
+        <div class="icon">📝</div>
+        <div class="label">Prompt<br>del usuario</div>
+      </div>
+      <div class="rag-arrow">→</div>
+      <div class="rag-node">
+        <div class="icon">🔍</div>
+        <div class="label">Template<br>Matcher</div>
+      </div>
+      <div class="rag-arrow">→</div>
+      <div class="rag-node" style="border-color:#7C3AED;">
+        <div class="icon">📐</div>
+        <div class="label">Templates<br>COMPLETOS</div>
+      </div>
+      <div class="rag-arrow">+</div>
+      <div class="rag-node">
+        <div class="icon">🧠</div>
+        <div class="label">ChromaDB<br>RAG Chunks</div>
+      </div>
+      <div class="rag-arrow">→</div>
+      <div class="rag-node" style="border-color:#10B981;">
+        <div class="icon">🤖</div>
+        <div class="label">System<br>Prompt + LLM</div>
+      </div>
+      <div class="rag-arrow">→</div>
+      <div class="rag-node" style="border-color:#EC4899;">
+        <div class="icon">📄</div>
+        <div class="label">Artefacto<br>Generado</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin:30px 0 14px;font-size:1em;">📚 Knowledge Base por Agente</h3>
+  <div class="detail-grid">
+    <div class="detail-card">
+      <h3><span>💻</span> Dev KB</h3>
+      <div class="section-title">Templates UI</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">🎨</span> credit-card.html — Landing tarjeta de crédito</div>
+        <div class="input-item"><span class="input-icon">📱</span> screen-template.md — Pantallas Kotlin Compose</div>
+      </div>
+      <div class="section-title">Guidelines por Stack</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">⚛️</span> React: folder-structure, react-query-patterns</div>
+        <div class="input-item"><span class="input-icon">🤖</span> Android: architecture-guidelines, compose-patterns</div>
+        <div class="input-item"><span class="input-icon">📱</span> Android CLI: onboarding guide</div>
+      </div>
+    </div>
+    <div class="detail-card">
+      <h3><span>🏛️</span> Arch KB</h3>
+      <div class="section-title">Documentos</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📐</span> architecture-patterns.md</div>
+        <div class="input-item"><span class="input-icon">📋</span> system-design-guidelines.md</div>
+      </div>
+    </div>
+    <div class="detail-card">
+      <h3><span>🎨</span> UX KB</h3>
+      <div class="section-title">Documentos</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">🎨</span> hackathon-ds-V2.md — Design System MACHBank</div>
+      </div>
+    </div>
+    <div class="detail-card">
+      <h3><span>📋</span> PRD KB</h3>
+      <div class="section-title">Documentos</div>
+      <div class="input-list">
+        <div class="input-item"><span class="input-icon">📝</span> prd_prompt.md — Guía de especificaciones</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin:30px 0 14px;font-size:1em;">⚙️ Cada agente recibe 3 capas de contexto</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+    <div style="background:#1E1B4B;border:1px solid #312E81;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.4em;margin-bottom:6px;">⚙️</div>
+      <div style="font-size:0.85em;font-weight:600;color:#C4B5FD;">Prompt</div>
+      <div style="font-size:0.7em;color:#7C3AED;margin-top:4px;">Editable en vivo<br>nodes/{agent}/{agent}_prompt.md</div>
+    </div>
+    <div style="background:#052E16;border:1px solid #166534;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.4em;margin-bottom:6px;">📐</div>
+      <div style="font-size:0.85em;font-weight:600;color:#86EFAC;">Templates</div>
+      <div style="font-size:0.7em;color:#10B981;margin-top:4px;">Archivos completos<br>rag/templates/{agent}/</div>
+    </div>
+    <div style="background:#172554;border:1px solid #1E40AF;border-radius:12px;padding:18px;text-align:center;">
+      <div style="font-size:1.4em;margin-bottom:6px;">🧠</div>
+      <div style="font-size:0.85em;font-weight:600;color:#93C5FD;">RAG Chunks</div>
+      <div style="font-size:0.7em;color:#3B82F6;margin-top:4px;">Búsqueda semántica<br>ChromaDB por agente</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 5: POSIBILIDADES -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-possibilities">
+  <p style="color:#94A3B8;font-size:0.9em;margin-bottom:20px;">Extensiones y evoluciones posibles del sistema agéntico.</p>
+
+  <div class="poss-grid">
+    <div class="poss-card p1">
+      <h4>🔀 Agentes Paralelos</h4>
+      <p>UX + Arquitectura pueden correr en paralelo después del PRD. Infra + Security también. Reduce el tiempo del ciclo a la mitad.</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Medio</div>
+    </div>
+    <div class="poss-card p2">
+      <h4>🔄 Dev Iterativo con Preview</h4>
+      <p>El Dev Agent genera código, el sistema lo compila, muestra preview en vivo, y el humano itera con feedback visual antes de aprobar. Ya implementado en sandbox.</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Bajo ✅ Parcial</div>
+    </div>
+    <div class="poss-card p3">
+      <h4>🧪 QA Agent con Ejecución Real</h4>
+      <p>QA no solo genera specs — ejecuta tests reales contra el código del Dev. Playwright para E2E, Jest para unit. Reporta cobertura real.</p>
+      <div class="poss-tag">Impacto: Muy Alto · Esfuerzo: Alto</div>
+    </div>
+    <div class="poss-card p4">
+      <h4>🤖 Multi-LLM por Agente</h4>
+      <p>Cada agente puede usar un modelo diferente según la tarea. GPT-4o para código, Claude para documentación, Gemini para arquitectura. A/B testing de modelos.</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Bajo ✅ Implementado</div>
+    </div>
+    <div class="poss-card p1">
+      <h4>📱 Sub-Agentes Especializados</h4>
+      <p>El Dev Agent delega a sub-agentes: uno para frontend React, otro para backend Python, otro para mobile Kotlin. Cada uno con su RAG y templates.</p>
+      <div class="poss-tag">Impacto: Muy Alto · Esfuerzo: Alto</div>
+    </div>
+    <div class="poss-card p2">
+      <h4>🔗 GitHub Actions Integration</h4>
+      <p>Después del PR, un GitHub Action corre tests, lint, build. Si falla, el Dev Agent recibe el error y auto-corrige (self-healing ya existe).</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Medio</div>
+    </div>
+    <div class="poss-card p3">
+      <h4>📊 Dashboard de ROI</h4>
+      <p>Tracking de tokens, costos, tiempo por fase, comparación entre modelos. Métricas de calidad por agente. Ya se trackea token_usage.</p>
+      <div class="poss-tag">Impacto: Medio · Esfuerzo: Bajo</div>
+    </div>
+    <div class="poss-card p4">
+      <h4>🧠 RAG Dinámico</h4>
+      <p>Los agentes aprenden de ciclos anteriores. Los entregables aprobados se indexan automáticamente como conocimiento para futuros ciclos.</p>
+      <div class="poss-tag">Impacto: Muy Alto · Esfuerzo: Medio</div>
+    </div>
+    <div class="poss-card p1">
+      <h4>🎯 Orquestador Inteligente</h4>
+      <p>El orquestador analiza el challenge y decide dinámicamente qué agentes activar, en qué orden, y con qué modelo. Skip de fases innecesarias.</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Medio</div>
+    </div>
+    <div class="poss-card p2">
+      <h4>🌐 Multi-Repo Orchestration</h4>
+      <p>El Dev Agent trabaja sobre múltiples repos simultáneamente: backend, frontend, mobile, infra. Cada uno con su branch y PR coordinados.</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Alto</div>
+    </div>
+    <div class="poss-card p3">
+      <h4>🔒 Security Agent con SAST</h4>
+      <p>El Security Agent ejecuta herramientas SAST reales (Semgrep, Bandit) contra el código generado y reporta vulnerabilidades concretas.</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Medio</div>
+    </div>
+    <div class="poss-card p4">
+      <h4>📋 Compliance Agent</h4>
+      <p>Nuevo agente que valida cumplimiento regulatorio: PCI-DSS para pagos, GDPR para datos, SOC2 para infraestructura. Específico para fintech.</p>
+      <div class="poss-tag">Impacto: Alto · Esfuerzo: Alto</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="footer">
+  MACH Race 2026 — MACHBank · Arquitectura Agéntica ADLC<br>
+  LangGraph · FastAPI · Vue.js · ChromaDB · Groq · OpenAI · Gemini
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+function showTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>

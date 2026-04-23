@@ -23,14 +23,14 @@ GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "te
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
 GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "") if not TEST_MODE else "test"  # Gemini
 
-# Modelos por agente — Groq, Gemini y OpenAI según necesidad
-MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero
-MODEL_SPECKIT      = "llama-3.3-70b-versatile"
+# Modelos por agente — Groq por defecto, Gemini para arch, OpenAI para dev
+MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"        # routing simple, modelo ligero
+MODEL_SPECKIT      = "llama-3.3-70b-versatile"    # plan maestro — requiere razonamiento complejo
 MODEL_PRD          = "llama-3.3-70b-versatile"
 MODEL_UX           = "llama-3.3-70b-versatile"
-MODEL_ARCHITECT    = "gemini-2.5-flash"            # arquitectura y engineering plan (Gemini)
+MODEL_ARCHITECT    = "gemini-2.5-flash"            # arquitectura + engineering plan (Gemini)
 MODEL_DEV          = "gpt-4o-mini"                 # OpenAI — mejor calidad para código
-MODEL_QA           = "llama-3.3-70b-versatile"
+MODEL_QA           = "llama-3.3-70b-versatile"    # recibe PRD+UX+ARCH+DEV
 MODEL_INFRA        = "llama-3.3-70b-versatile"
 MODEL_SECURITY     = "llama-3.3-70b-versatile"
 
@@ -67,12 +67,18 @@ DASHBOARD_URL    = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
 
 
 # ── Checkpointing ──────────────────────────────────────────────────────────────
-CHECKPOINTER     = os.environ.get("CHECKPOINTER", "memory")
+CHECKPOINTER     = os.environ.get("CHECKPOINTER", "sqlite")
 SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
 
 
 # ── GitHub ───────────────────────────────────────────────────────────────
 GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "")
-REPO_BE_NAME    = os.environ.get("REPO_BE_NAME", "mach-backend-test-hackathon")
 REPO_FE_NAME    = os.environ.get("REPO_FE_NAME", "mach-frontend-test-hackathon")
+
+
+# ── Confluence ──────────────────────────────────────────────────────────────────────────
+CONFLUENCE_URL       = os.environ.get("CONFLUENCE_URL", "")
+CONFLUENCE_EMAIL     = os.environ.get("CONFLUENCE_EMAIL", "")
+CONFLUENCE_API_TOKEN = os.environ.get("CONFLUENCE_API_TOKEN", "")
+CONFLUENCE_SPACE_KEY = os.environ.get("CONFLUENCE_SPACE_KEY", "MACH")

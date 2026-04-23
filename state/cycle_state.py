@@ -80,6 +80,9 @@ class CycleState(TypedDict):
     prd_content: Optional[str]
     """Contenido completo del PRDSPECS.md generado."""
 
+    confluence_prd_url: Optional[str]
+    """URL de la página Confluence con el PRD Rationale."""
+
     ux_content: Optional[str]
     """Contenido completo del UXSPECS.md generado."""
 
@@ -99,13 +102,13 @@ class CycleState(TypedDict):
     """URL del servidor de preview si el build fue exitoso y ENABLE_BUILD_VALIDATION=true."""
 
     qa_content: Optional[str]
-    """Contenido completo del QASCPECS.md generado."""
+    """Contenido completo del QASPECS.md generado."""
 
     qa_passed: Optional[bool]
     """True si QA aprobó todos los criterios, False si encontró blockers."""
 
     infra_content: Optional[str]
-    """Contenido completo del INFESPEOS.md generado."""
+    """Contenido completo del INFESPECS.md generado."""
 
     security_content: Optional[str]
     """Contenido completo del DEVSECOPS.md generado."""
@@ -216,6 +219,7 @@ def initial_state(
         current_phase="init",
         # Deliverables — vacíos hasta que cada agente corra
         prd_content=None,
+        confluence_prd_url=None,
         ux_content=None,
         arch_content=None,
         dev_content=None,

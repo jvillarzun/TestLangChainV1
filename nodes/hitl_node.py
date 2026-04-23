@@ -137,12 +137,25 @@ def _get_deliverable_for_phase(state: CycleState, phase: str) -> tuple[str | Non
         "prd":   (state.get("prd_content"),      None),
         "ux":    (state.get("ux_content"),        None),
         "arch":  (state.get("arch_content"),      None),
-        "dev":   (state.get("dev_content"),       f"*PR GitHub:* {state.get('dev_pr_url', 'N/A')}"),
+        "dev":   (state.get("dev_content"),       _format_pr_links(state)),
         "qa":    (state.get("qa_content"),        None),
         "infra": (state.get("infra_content"),     None),
         "sec":   (state.get("security_content"),  None),
     }
     return mapping.get(phase, (None, None))
+
+
+def _format_pr_links(state: CycleState) -> str:
+    pr_urls: list[str] = list(state.get("dev_pr_urls") or [])
+    first = state.get("dev_pr_url")
+    if first and first not in pr_urls:
+        pr_urls.insert(0, first)
+    if not pr_urls:
+        return "⚠️ *No se abrieron PRs* — revisar logs del ciclo DEV"
+    lines = ["*PRs abiertos en GitHub:*"]
+    for url in pr_urls:
+        lines.append(f"• <{url}|Ver PR>")
+    return "\n".join(lines)
 
 
 def _next_phase(phase: str) -> str:

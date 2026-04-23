@@ -18,6 +18,28 @@ Produces specs de UX detalladas que Dev puede implementar sin ambigüedad.
 
 {prd_content}
 
+## Sistema existente — repositorio `{repo_fe_name}`
+
+### Árbol de archivos
+```
+{repo_tree}
+```
+
+### Componentes UI detectados
+```
+{existing_components}
+```
+
+**Instrucciones según tipo de challenge:**
+
+- Si `challenge_type == brownfield`: el sistema YA TIENE pantallas y componentes en producción. Tu UXSPECS debe:
+  1. Reutilizar componentes existentes (visibles arriba) — no rediseñar lo que ya funciona
+  2. Especificar SOLO las pantallas nuevas o las que cambian — no las que no se tocan
+  3. Indicar explícitamente qué componente existente se reutiliza en cada pantalla nueva
+  4. Si necesitas un componente que no existe, documenta que es nuevo
+
+- Si `challenge_type == greenfield`: el repo puede estar vacío. Diseña la UI desde cero.
+
 ## Feedback de revisión anterior (si aplica)
 
 {feedback}

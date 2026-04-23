@@ -36,7 +36,7 @@ def run_infra_node(state: CycleState) -> dict:
         notify_team(f"❌ INFRA-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
         return {"error_phase": "infra", "error_message": str(e), "infra_content": None, "token_usage": []}
 
-    output_path = save_output("INFESPEOS.md", infra_content)
+    output_path = save_output("INFESPECS.md", infra_content)
     print(f"   💾 Guardado en {output_path}")
 
     task_key = create_task(

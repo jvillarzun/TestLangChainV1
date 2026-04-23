@@ -1,55 +1,185 @@
 import json
 import re
-import os
 
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, create_llm, get_phase_instructions
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from nodes.dev.dev_validator import validate_dev_output, parse_file_blocks
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
-from tools.github_tools import create_branch_and_push, open_pull_request
-from config.settings import MODEL_DEV, REPO_BE_NAME, REPO_FE_NAME
+from tools.github_tools import create_branch_and_push, open_pull_request, get_files_content, get_repo_context
+from config.settings import MODEL_DEV, REPO_FE_NAME
 
-# Flag para habilitar validación de build (requiere setup adicional)
-ENABLE_BUILD_VALIDATION = os.environ.get("ENABLE_BUILD_VALIDATION", "false").lower() == "true"
-MAX_HEALING_ATTEMPTS = 3
+_HTML_SKELETON = """\
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><!-- TÍTULO --></title>
+  <style>
+    /* Estilos mínimos aquí */
+  </style>
+</head>
+<body>
+  <!-- Contenido principal aquí -->
+  <script>
+    // Lógica JavaScript aquí
+  </script>
+</body>
+</html>
+```"""
+
+_REACT_SKELETON = """\
+```tsx
+import { useState } from 'react'
+
+export default function App() {
+  const [state, setState] = useState(null)
+
+  return (
+    <div>
+      {/* Componentes aquí */}
+    </div>
+  )
+}
+```"""
+
+_LAMBDA_SKELETON = """\
+```python
+import json
+
+def handler(event, context):
+    try:
+        body = json.loads(event.get('body', '{}'))
+        # Lógica aquí
+        return {'statusCode': 200, 'body': json.dumps({'ok': True})}
+    except Exception as e:
+        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+```"""
+
+_ANDROID_SKELETON = """\
+```kotlin
+@Composable
+fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    // UI aquí
+}
+```"""
+
+_KEYWORDS: list[tuple[list[str], str]] = [
+    (["html", "página", "pagina", "web estática", "landing", "static"], _HTML_SKELETON),
+    (["react", "next", "frontend", "tsx", "jsx"],                       _REACT_SKELETON),
+    (["android", "kotlin", "compose", "mobile"],                        _ANDROID_SKELETON),
+    (["lambda", "fastapi", "api rest", "backend", "endpoint"],          _LAMBDA_SKELETON),
+]
+
+
+def _pick_code_reference(
+    challenge_description: str,
+    instructions: str,
+    repo_key_files: dict | None = None,
+) -> str:
+    """
+    Para brownfield: usa archivos reales del repo como referencia.
+    Para greenfield o repo vacío: usa skeleton según tipo de challenge.
+    """
+    if repo_key_files:
+        lines = ["Archivos clave del repositorio actual (usa como referencia de estructura y estilo):\n"]
+        for path, content in list(repo_key_files.items())[:4]:
+            preview = content[:1200]
+            lines.append(f"### `{path}`\n```\n{preview}\n{'...(truncado)' if len(content) > 1200 else ''}\n```\n")
+        return "\n".join(lines)
+
+    text = (challenge_description + " " + instructions).lower()
+    for keywords, skeleton in _KEYWORDS:
+        if any(k in text for k in keywords):
+            return skeleton
+    return "Sin referencia de código base — genera desde cero según el ENGINEERING_PLAN."
+
+
+def _get_modify_files_context(github_plan: str, repo_name: str) -> str:
+    """
+    Lee TODOS los archivos del engineering plan que existen en el repo.
+    No filtra por action — ARQ puede etiquetar mal CREATE/MODIFY.
+    Retorna string formateado listo para inyectar en el prompt.
+    """
+    if not github_plan:
+        return ""
+    try:
+        plan = json.loads(github_plan)
+        steps = [s for s in plan.get("steps", []) if s.get("repo", "frontend") == "frontend"]
+        all_paths = [s["file"] for s in steps if s.get("file")]
+        action_map = {s["file"]: s.get("action", "CREATE").upper() for s in steps if s.get("file")}
+    except (json.JSONDecodeError, KeyError):
+        return ""
+
+    if not all_paths:
+        return ""
+
+    print(f"   🔍 [DEV] Verificando {len(all_paths)} archivo(s) del plan en GitHub...")
+    contents = get_files_content(repo_name, all_paths)
+
+    if not contents:
+        return ""
+
+    lines = [
+        "⚠️  ARCHIVOS QUE YA EXISTEN en el repositorio — conserva TODO el código original:\n",
+        "**CRÍTICO**: Incluye el contenido completo de cada archivo en GENERATED_FILES.",
+        "Solo agrega/modifica lo necesario. NO elimines funciones ni lógica existente.\n",
+    ]
+    for path, content in contents.items():
+        plan_action = action_map.get(path, "?")
+        lines.append(f"### `{path}` (plan dice: {plan_action} — REAL: EXISTE en repo)\n```\n{content}\n```\n")
+        print(f"   ✔ Existente: {path} ({len(content)} chars) [plan={plan_action}]")
+
+    new_paths = [p for p in all_paths if p not in contents]
+    if new_paths:
+        lines.append("### Archivos NUEVOS (no existen aún — crear desde cero):\n")
+        for p in new_paths:
+            lines.append(f"- `{p}`")
+
+    return "\n".join(lines)
 
 
 def _parse_generated_files(content: str) -> list[dict]:
     """
-    Extrae archivos del output del LLM.
-    Soporta dos formatos:
-      1. Nuevo (preferido): bloques ## FILE: repo/path
-      2. Legacy: bloque ```json { "files": [...] }```
+    Extrae archivos del output del LLM. Intenta dos formatos en orden:
+      1. Delimitadores <<<FILE: path>>> ... <<<ENDFILE>>> (preferido — sin JSON escaping)
+      2. Bloque JSON {"files": [...]} (fallback — por si el LLM usa el formato antiguo)
     """
-    print(f"\n🔍 [DEV Parser] Buscando archivos en respuesta LLM...")
-    print(f"   Longitud del contenido: {len(content)} chars")
+    print(f"\n🔍 [DEV Parser] Buscando archivos en respuesta LLM ({len(content)} chars)...")
 
-    # ── Formato nuevo: ## FILE: repo/path ────────────────────────────────────
-    files = parse_file_blocks(content)
-    if files:
-        print(f"✅ [DEV Parser] Formato ## FILE: — {len(files)} archivo(s) encontrado(s)")
-        for i, f in enumerate(files, 1):
-            print(f"   {i}. Repo: {f['repo']}, Path: {f['path']}, Content: {len(f['content'])} chars")
+    # ── Formato 1: delimitadores ───────────────────────────────────────────────
+    matches = re.findall(r"<<<FILE:\s*(.+?)>>>(.*?)<<<ENDFILE>>>", content, re.DOTALL)
+    if matches:
+        files = []
+        for path, file_content in matches:
+            path = path.strip()
+            file_content = file_content.strip()
+            files.append({"repo": "frontend", "path": path, "content": file_content})
+            print(f"   ✔ [delimitador] {path} ({len(file_content)} chars)")
+        print(f"✅ [DEV Parser] {len(files)} archivo(s) extraídos via <<<FILE>>>")
         return files
 
-    # ── Formato legacy: bloque JSON ───────────────────────────────────────────
-    print(f"⚠️  [DEV Parser] Formato ## FILE: no encontrado — intentando JSON legacy...")
+    # ── Formato 2: JSON fallback ───────────────────────────────────────────────
+    print(f"⚠️  [DEV Parser] No se encontraron <<<FILE>>> — intentando fallback JSON...")
     match = re.search(r"```json\s*(\{.*?\"files\".*?\})\s*```", content, re.DOTALL)
     if not match:
-        print(f"❌ [DEV Parser] NO se encontró ningún formato válido de archivos")
+        print(f"❌ [DEV Parser] Ningún formato reconocido — no se generarán PRs")
         return []
 
-    json_str = match.group(1)
     try:
-        data = json.loads(json_str)
-        files = data.get("files", [])
-        print(f"✅ [DEV Parser] JSON legacy parseado — {len(files)} archivo(s)")
-        for i, f in enumerate(files, 1):
-            print(f"   {i}. Repo: {f.get('repo','?')}, Path: {f.get('path','?')}, Content: {len(f.get('content',''))} chars")
+        data = json.loads(match.group(1))
+        all_files = data.get("files", [])
+        files = [f for f in all_files if f.get("repo", "frontend") != "backend"]
+        skipped = len(all_files) - len(files)
+        print(f"✅ [DEV Parser] JSON fallback: {len(files)} archivo(s) | ignorados backend: {skipped}")
+        for f in files:
+            print(f"   ✔ [json] {f.get('path', '?')} ({len(f.get('content', ''))} chars)")
         return files
     except json.JSONDecodeError as e:
-        print(f"❌ [DEV Parser] ERROR parseando JSON: {e}")
+        print(f"❌ [DEV Parser] JSON inválido: {e}")
         return []
 
 
@@ -111,97 +241,8 @@ def _push_files_and_open_pr(
     
     return pr_url
 
-
-def _self_healing_loop(
-    state: CycleState,
-    initial_content: str,
-    system_prompt: str,
-) -> tuple[str, list[dict]]:
-    """
-    Bucle de auto-sanación: valida build y reintenta con feedback si falla.
-    También detecta cuando el LLM ignora el formato de salida.
-    """
-    if not ENABLE_BUILD_VALIDATION:
-        print("\n⚠️  [Self-Healing] Validación de build deshabilitada (ENABLE_BUILD_VALIDATION=false)")
-        return initial_content, _parse_generated_files(initial_content)
-    
-    print(f"\n🔄 [Self-Healing] Iniciando bucle de auto-sanación (máx {MAX_HEALING_ATTEMPTS} intentos)")
-    
-    from nodes.dev.build_validator import setup_repo, validate_frontend_build
-    
-    current_content = initial_content
-    
-    for attempt in range(1, MAX_HEALING_ATTEMPTS + 1):
-        print(f"\n🔄 [Intento {attempt}/{MAX_HEALING_ATTEMPTS}]")
-        generated_files = _parse_generated_files(current_content)
-        
-        if not generated_files and len(current_content) > 100:
-            print("\n⚠️  [Self-Healing] Parser no encontró archivos pero hay contenido")
-            if attempt < MAX_HEALING_ATTEMPTS:
-                error_feedback = (
-                    "## 🚨 ERROR CRÍTICO DE FORMATO\n\n"
-                    "Tu respuesta NO siguió el formato requerido. "
-                    "Usa: ## FILE: repo/path seguido de bloque de código.\n"
-                    "GENERA NUEVAMENTE TODOS LOS ARCHIVOS."
-                )
-                healing_prompt = system_prompt + "\n\n" + error_feedback
-                try:
-                    from langchain_core.messages import SystemMessage, HumanMessage
-                    llm = create_llm(MODEL_DEV)
-                    response = llm.invoke([
-                        SystemMessage(content=healing_prompt),
-                        HumanMessage(content="Genera TODOS los archivos usando ## FILE: repo/path."),
-                    ])
-                    current_content = response.content
-                    save_output(f"DEVSPECS_format_healing_{attempt}.md", current_content)
-                    continue
-                except Exception as e:
-                    print(f"   ❌ Error en corrección de formato: {e}")
-                    return current_content, []
-            else:
-                return current_content, []
-        
-        if not generated_files:
-            return current_content, generated_files
-        
-        fe_files = [f for f in generated_files if (
-            f.get("repo") == "frontend" or f.get("repo") == "fe" or
-            REPO_FE_NAME in f.get("repo", "")
-        )]
-        
-        fe_valid = True
-        fe_error = ""
-        if fe_files:
-            branch = f"feat/adlc-{state['thread_id'][:8]}"
-            fe_repo_path = setup_repo(REPO_FE_NAME, branch, fe_files)
-            if fe_repo_path:
-                fe_valid, fe_error = validate_frontend_build(fe_repo_path)
-        
-        if fe_valid:
-            print(f"\n✅ [Self-Healing] Build validado en intento {attempt}!")
-            return current_content, generated_files
-        
-        if attempt < MAX_HEALING_ATTEMPTS:
-            error_feedback = f"## 🚨 ERRORES DE COMPILACIÓN\n\n```\n{fe_error[:1000]}\n```\nCorrige TODOS los archivos."
-            healing_prompt = system_prompt + "\n\n" + error_feedback
-            try:
-                from langchain_core.messages import SystemMessage, HumanMessage
-                llm = create_llm(MODEL_DEV)
-                response = llm.invoke([
-                    SystemMessage(content=healing_prompt),
-                    HumanMessage(content="Corrige los errores y genera nuevamente TODOS los archivos."),
-                ])
-                current_content = response.content
-                save_output(f"DEVSPECS_healing_attempt_{attempt}.md", current_content)
-            except Exception as e:
-                print(f"   ❌ Error en auto-sanación: {e}")
-                return current_content, generated_files
-    
-    return current_content, generated_files
-
-
 def run_dev_node(state: CycleState) -> dict:
-    """Nodo DEV — genera código real y abre PRs en FE repo."""
+    """Nodo DEV — genera código real y abre PRs en BE y FE repos."""
     print("\n💻 DEV-AGENT: Generando DEVSPECS.md + código para PRs...")
 
     feedback = _get_last_feedback(state, "dev")
@@ -210,18 +251,12 @@ def run_dev_node(state: CycleState) -> dict:
 
     github_plan = state.get("github_plan") or ""
 
-    # ── Leer contexto del repo Frontend ──────────────────────────────────────
-    print("\n📖 [DEV] Leyendo código actual del repositorio Frontend...")
-    from tools.github_tools import get_repo_context
-    try:
-        fe_ctx = get_repo_context(REPO_FE_NAME)
-        print(f"   ✅ Frontend: {len(fe_ctx.get('tree', []))} archivos")
-        fe_context = "Árbol: " + str(len(fe_ctx.get('tree', []))) + " archivos\nArchivos clave:\n"
-        for path, content in fe_ctx.get('files', {}).items():
-            fe_context += "\n--- " + path + " ---\n" + content[:2000] + "...\n"
-    except Exception as e:
-        print(f"   ⚠️  No se pudo leer repo: {e}")
-        fe_context = "No disponible - GitHub offline"
+    # Contexto real del repositorio — árbol completo + archivos clave
+    print(f"   🗂️  [DEV] Leyendo contexto del repositorio {REPO_FE_NAME}...")
+    _repo_ctx = get_repo_context(REPO_FE_NAME)
+    _repo_tree = "\n".join(_repo_ctx.get("tree", [])) or "Repositorio vacío o no accesible."
+    _repo_key_files = _repo_ctx.get("files", {})
+    print(f"   🗂️  [DEV] Árbol: {len(_repo_ctx.get('tree', []))} archivos | Clave: {list(_repo_key_files.keys())}")
 
     try:
         from rag.rag_helper import get_rag_context
@@ -229,6 +264,10 @@ def run_dev_node(state: CycleState) -> dict:
         _rag = get_rag_context("dev", _rag_query)
     except Exception:
         _rag = None
+
+    _instructions = get_phase_instructions(state, "dev") or ""
+    _code_ref     = _pick_code_reference(state["challenge_description"], _instructions, _repo_key_files or None)
+    _modify_ctx   = _get_modify_files_context(github_plan, REPO_FE_NAME)
 
     system_prompt = load_prompt(
         "dev",
@@ -239,17 +278,13 @@ def run_dev_node(state: CycleState) -> dict:
         arch_content=state.get("arch_content") or "",
         ux_content=state.get("ux_content") or "",
         github_plan=github_plan,
-        repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
+        repo_tree=_repo_tree,
+        modify_files_context=_modify_ctx or "Sin archivos existentes a modificar.",
         feedback=feedback or "Sin feedback previo.",
-        orchestrator_instructions=get_phase_instructions(state, "dev") or "Sin instrucciones adicionales.",
+        orchestrator_instructions=_instructions or "Sin instrucciones adicionales.",
+        code_reference=_code_ref,
     )
-
-    # Inyectar contexto de código actual
-    system_prompt += "\n\n## 📖 Código Actual del Repositorio Frontend\n\n"
-    system_prompt += "### Frontend — " + REPO_FE_NAME + "\n" + fe_context + "\n\n"
-    system_prompt += "**IMPORTANTE**: Cuando modifiques un archivo existente, incluye TODO el código actual fusionando tus cambios.\n\n"
-
     if _rag:
         system_prompt += f"\n\n## Contexto de Knowledge Base (DEV):\n{_rag}"
         print(f"   📚 RAG: {len(_rag)} chars de contexto inyectados")
@@ -268,13 +303,11 @@ def run_dev_node(state: CycleState) -> dict:
     except Exception:
         pass
 
-    print(f"   📦 Contexto total del prompt: {len(system_prompt)} chars")
-
     try:
         dev_content, _usage = llm_invoke(
             model=MODEL_DEV,
             system_prompt=system_prompt,
-            user_message="Genera el DEVSPECS.md completo y el código de TODOS los archivos usando ## FILE: repo/path. CERO placeholders, código COMPLETO.",
+            user_message="Genera el DEVSPECS.md completo y el bloque GENERATED_FILES según las instrucciones.",
             stub_content="# DEVSPECS.md stub — TEST_MODE activo",
         )
         _usage["agent"] = "dev"
@@ -298,48 +331,26 @@ def run_dev_node(state: CycleState) -> dict:
             state["thread_id"],
         )
 
-    # ── Auto-sanación con validación de build ─────────────────────────────────
-    dev_content, generated_files = _self_healing_loop(state, dev_content, system_prompt)
-    save_output("DEVSPECS.md", dev_content)
-
     # ── Extraer archivos generados y subir PRs ────────────────────────────────
+    generated_files = _parse_generated_files(dev_content)
     branch = f"feat/adlc-{state['thread_id'][:8]}"
     pr_urls: list[str] = []
-    preview_url: str | None = None
 
     if generated_files:
-        fe_files = [f for f in generated_files if (
-            f.get("repo") == "frontend" or f.get("repo") == "fe" or
-            REPO_FE_NAME in f.get("repo", "")
-        )]
-        be_files = [f for f in generated_files if f.get("repo") == "backend"]
+        for gf in generated_files:
+            fpath = gf.get("path", "unknown")
+            fcontent = gf.get("content", "")
+            local_path = save_output(f"generated/{fpath}", fcontent)
+            print(f"   💾 Guardado local: {local_path}")
+
         challenge_name = state["challenge_name"]
-
-        if be_files:
-            print(f"\n📤 [Subiendo Backend] {len(be_files)} archivos a {REPO_BE_NAME}...")
-            pr = _push_files_and_open_pr(REPO_BE_NAME, branch, be_files, challenge_name, github_plan)
-            if pr:
-                pr_urls.append(pr)
-
-        if fe_files:
-            print(f"\n📤 [Subiendo Frontend] {len(fe_files)} archivos a {REPO_FE_NAME}...")
-            pr = _push_files_and_open_pr(REPO_FE_NAME, branch, fe_files, challenge_name, github_plan)
-            if pr:
-                pr_urls.append(pr)
-
-        # Preview server si está habilitado
-        if ENABLE_BUILD_VALIDATION and fe_files:
-            try:
-                from nodes.dev.build_validator import setup_repo, start_preview_server
-                fe_repo_path = setup_repo(REPO_FE_NAME, branch, fe_files)
-                if fe_repo_path:
-                    success, url = start_preview_server(fe_repo_path, port=3001)
-                    if success:
-                        preview_url = url
-            except Exception:
-                pass
+        print(f"   📦 Subiendo {len(generated_files)} archivos a {REPO_FE_NAME}...")
+        pr = _push_files_and_open_pr(REPO_FE_NAME, branch, generated_files, challenge_name, github_plan)
+        if pr:
+            pr_urls.append(pr)
+            print(f"   🔗 PR: {pr}")
     else:
-        print("\n⚠️  [Sin archivos generados] No se abrieron PRs")
+        print("   ⚠️  GENERATED_FILES no encontrado — no se abrieron PRs")
 
     task_key = create_task(
         phase="dev",
@@ -349,25 +360,23 @@ def run_dev_node(state: CycleState) -> dict:
         pr_url=pr_urls[0] if pr_urls else None,
     )
 
-    notify_team(f"✅ DEV-AGENT completado para `{state['challenge_name']}`.\nPRs: {', '.join(pr_urls) if pr_urls else 'Ninguno'}", state["thread_id"])
-
     print(f"\n{'='*80}")
     print(f"📋 [DEV-AGENT] RESUMEN FINAL")
     print(f"{'='*80}")
     print(f"   ✅ DEVSPECS.md generado ({len(dev_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
     print(f"   🎫 Jira Task: {task_key or 'N/A'}")
     print(f"   🔗 PRs abiertos: {len(pr_urls)}")
-    for i, url in enumerate(pr_urls, 1):
-        print(f"      {i}. {url}")
-    if preview_url:
-        print(f"   👁️  Preview: {preview_url}")
+    if pr_urls:
+        for i, url in enumerate(pr_urls, 1):
+            print(f"      {i}. {url}")
+    else:
+        print(f"   ⚠️  NO SE ABRIERON PRs")
     print(f"{'='*80}\n")
 
     return {
         "dev_content":     dev_content,
         "dev_pr_url":      pr_urls[0] if pr_urls else None,
         "dev_pr_urls":     pr_urls,
-        "preview_url":     preview_url,
         "error_phase":     None,
         "error_message":   None,
         "jira_story_keys": [task_key] if task_key else [],

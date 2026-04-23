@@ -10,7 +10,6 @@ Responsabilidades:
 
 Usa PyGithub. Requiere en .env:
   GITHUB_TOKEN, GITHUB_USERNAME,
-  REPO_BE_NAME (mach-backend-test-hackathon),
   REPO_FE_NAME (mach-frontend-test-hackathon)
 """
 
@@ -25,7 +24,6 @@ from github.Repository import Repository
 from config.settings import (
     GITHUB_TOKEN,
     GITHUB_USERNAME,
-    REPO_BE_NAME,
     REPO_FE_NAME,
 )
 
@@ -33,7 +31,6 @@ from config.settings import (
 print(f"🔑 [GitHub Init] Inicializando cliente GitHub...")
 print(f"🔑 [GitHub Init] Token presente: {'✓' if GITHUB_TOKEN else '✗ FALTA'}")
 print(f"🔑 [GitHub Init] Username: {GITHUB_USERNAME or '✗ FALTA'}")
-print(f"🔑 [GitHub Init] Repo BE: {REPO_BE_NAME}")
 print(f"🔑 [GitHub Init] Repo FE: {REPO_FE_NAME}")
 
 _gh = None
@@ -70,6 +67,34 @@ def _get_repo(repo_name: str) -> Repository:
         raise RuntimeError("GitHub no disponible - credenciales inválidas")
     full_name = repo_name if "/" in repo_name else f"{GITHUB_USERNAME}/{repo_name}"
     return _gh.get_repo(full_name)
+
+
+# ── get_files_content ────────────────────────────────────────────────────────
+
+def get_files_content(repo_name: str, paths: list[str]) -> dict[str, str]:
+    """
+    Lee el contenido actual de archivos específicos desde default_branch.
+    Retorna {path: contenido} — omite archivos que no existen.
+    """
+    if not paths:
+        return {}
+    try:
+        repo = _get_repo(repo_name)
+        default_branch = repo.default_branch
+        result: dict[str, str] = {}
+        for path in paths:
+            try:
+                cf = repo.get_contents(path, ref=default_branch)
+                if not isinstance(cf, list):
+                    result[path] = cf.decoded_content.decode("utf-8")
+            except UnknownObjectException:
+                pass
+            except Exception as exc:
+                print(f"[GitHub] No se pudo leer {path}: {exc}")
+        return result
+    except Exception as exc:
+        print(f"[GitHub] Error en get_files_content({repo_name}): {exc}")
+        return {}
 
 
 # ── get_repo_context ──────────────────────────────────────────────────────────
@@ -176,19 +201,12 @@ def create_branch_and_push(
         for idx, change in enumerate(changes, 1):
             path: str = change.get("path", "")
             content: str = change.get("content", "")
-            
+
             if not path:
                 print(f"❌ [GitHub] Archivo {idx}/{len(changes)}: SIN PATH - saltando")
                 continue
-            
-            # 🔧 PROBLEMA 1 FIX: Decodificar \n literales a saltos de línea reales
-            # Si el LLM devolvió "\\n" en el JSON, Python lo parsea como "\n" (backslash + n)
-            # Necesitamos convertir eso a saltos de línea reales antes de enviar a GitHub
+
             print(f"📝 [GitHub] Archivo {idx}/{len(changes)}: {path}")
-            if '\\n' in content or '\\t' in content or '\\r' in content:
-                print(f"   🔧 Detectados escapes literales - decodificando...")
-                content = content.replace('\\n', '\n').replace('\\t', '\t').replace('\\r', '\r')
-            
             try:
                 print(f"   🔍 Verificando si existe en rama {branch_name}...")
                 existing = repo.get_contents(path, ref=branch_name)
@@ -217,7 +235,7 @@ def create_branch_and_push(
             except Exception as file_exc:
                 print(f"   ❌ ERROR al procesar {path}: {file_exc}")
                 raise
-            
+
             commit_sha = result["commit"].sha
             print(f"   📌 Commit SHA: {commit_sha[:8]}...")
 

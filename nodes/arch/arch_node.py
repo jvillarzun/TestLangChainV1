@@ -5,26 +5,18 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_ARCHITECT, REPO_BE_NAME, REPO_FE_NAME
 from tools.github_tools import get_repo_context
+from config.settings import MODEL_ARCHITECT, REPO_FE_NAME
 
 def _format_context(ctx: dict) -> str:
     """Serializa el contexto de repo a texto para el prompt."""
     lines = ["=== Árbol de archivos ==="]
     for path in ctx.get("tree", []):
-        lines.append("  " + path)
-    lines.append("\n=== Archivos clave (CONTENIDO COMPLETO PARA LLD) ===")
-    
-    files_dict = ctx.get("files", {})
-    if not files_dict:
-        lines.append("\n⚠️ ADVERTENCIA: No se pudo obtener el contenido de los archivos.")
-        
-    for path, content in files_dict.items():
+        lines.append(f"  {path}")
+    lines.append("\n=== Archivos clave ===")
+    for path, content in ctx.get("files", {}).items():
         lines.append(f"\n--- {path} ---")
-        # Subimos el límite a 12000 para asegurar que vea el final de los componentes React
-        # Los modelos modernos aguantan este contexto sin problema.
-        lines.append(content[:12000]) 
-        
+        lines.append(content[:3000])  # cap para no exceder ventana de contexto
     return "\n".join(lines)
 
 
@@ -47,11 +39,11 @@ def run_arch_node(state: CycleState) -> dict:
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
 
-    # ── Obtener contexto de repos (FRONTEND-ONLY) ────────────────────────────
-    print("   🔍 Obteniendo contexto del repositorio Frontend...")
+    # ── Obtener contexto de repos ────────────────────────────────────────────
+    print("   🔍 Obteniendo contexto de repositorios GitHub...")
     fe_ctx = get_repo_context(REPO_FE_NAME)
     fe_context = _format_context(fe_ctx)
-    print(f"   ✔ FE: {len(fe_ctx['tree'])} archivos (Frontend-Only Architecture)")
+    print(f"   ✔ FE: {len(fe_ctx['tree'])} archivos")
 
     try:
         from rag.rag_helper import get_rag_context
