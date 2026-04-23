@@ -16,6 +16,7 @@ Para configurar en Docker:
 
 import subprocess
 import os
+import shutil
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -45,7 +46,40 @@ def validate_frontend_build(repo_path: str) -> Tuple[bool, str]:
         return False, error
     
     try:
-        # Intentar build de Next.js/React
+        # LIMPIEZA: Borrar .npmrc y node_modules, MANTENER package-lock.json
+        # El flag --registry en CLI sobrescribe cualquier .npmrc del repo
+        npmrc_path = repo_dir / ".npmrc"
+        node_modules_path = repo_dir / "node_modules"
+        
+        if npmrc_path.exists():
+            print(f"   🧹 Eliminando .npmrc del repo (puede contener registry privado)")
+            npmrc_path.unlink()
+        
+        if node_modules_path.exists():
+            print(f"   🧹 Eliminando node_modules (instalación limpia)")
+            shutil.rmtree(node_modules_path)
+        
+        # PASO 1: Instalar dependencias (--registry sobrescribe .npmrc)
+        print(f"   📦 Instalando dependencias: npm ci --registry=https://registry.npmjs.org/")
+        install_result = subprocess.run(
+            ["npm", "ci",  # ci en lugar de install = más rápido y determinista
+             "--registry=https://registry.npmjs.org/",  # Forzar registry público (sobrescribe .npmrc)
+             "--ignore-scripts"],  # Ignorar postinstall scripts por seguridad
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutos para install
+        )
+        
+        if install_result.returncode != 0:
+            error = f"npm install falló con código {install_result.returncode}\n\nSTDOUT:\n{install_result.stdout}\n\nSTDERR:\n{install_result.stderr}"
+            print(f"   ❌ Instalación de dependencias falló")
+            print(f"   Error preview: {install_result.stderr[:500]}...")
+            return False, error
+        
+        print(f"   ✅ Dependencias instaladas correctamente")
+        
+        # PASO 2: Intentar build de Next.js/React
         print(f"   🔧 Ejecutando: npm run build")
         result = subprocess.run(
             ["npm", "run", "build"],
@@ -71,74 +105,6 @@ def validate_frontend_build(repo_path: str) -> Tuple[bool, str]:
     except FileNotFoundError:
         error = "npm no encontrado - Node.js no instalado en el contenedor"
         print(f"   ⚠️  {error}")
-        return False, error
-    except Exception as e:
-        error = f"Error inesperado: {str(e)}"
-        print(f"   ❌ {error}")
-        return False, error
-
-
-def validate_backend_build(repo_path: str) -> Tuple[bool, str]:
-    """
-    Valida que el backend pase tests básicos o compile.
-    
-    Args:
-        repo_path: Ruta al repositorio backend clonado
-        
-    Returns:
-        (success: bool, error_message: str)
-    """
-    print(f"\n🔨 [Build Validator] Validando backend en: {repo_path}")
-    
-    repo_dir = Path(repo_path)
-    if not repo_dir.exists():
-        error = f"Repositorio no encontrado en {repo_path}"
-        print(f"   ❌ {error}")
-        return False, error
-    
-    # Detectar tipo de proyecto
-    is_node = (repo_dir / "package.json").exists()
-    is_python = (repo_dir / "requirements.txt").exists() or (repo_dir / "pyproject.toml").exists()
-    
-    try:
-        if is_node:
-            print(f"   🔧 Proyecto Node.js detectado - ejecutando: npm test")
-            result = subprocess.run(
-                ["npm", "test", "--", "--passWithNoTests"],
-                cwd=repo_dir,
-                capture_output=True,
-                text=True,
-                timeout=180,
-            )
-        elif is_python:
-            print(f"   🔧 Proyecto Python detectado - ejecutando: python -m py_compile")
-            # Compilar todos los archivos .py
-            py_files = list(repo_dir.rglob("*.py"))
-            if not py_files:
-                return True, ""
-            
-            result = subprocess.run(
-                ["python", "-m", "py_compile"] + [str(f) for f in py_files[:10]],  # máximo 10 archivos
-                cwd=repo_dir,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-        else:
-            print(f"   ⚠️  Tipo de proyecto desconocido - saltando validación")
-            return True, ""
-        
-        if result.returncode == 0:
-            print(f"   ✅ Validación exitosa!")
-            return True, ""
-        else:
-            error = f"Validación falló\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
-            print(f"   ❌ Validación falló")
-            return False, error
-            
-    except subprocess.TimeoutExpired:
-        error = "Validación timeout"
-        print(f"   ❌ {error}")
         return False, error
     except Exception as e:
         error = f"Error inesperado: {str(e)}"

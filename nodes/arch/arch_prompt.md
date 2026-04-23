@@ -49,9 +49,9 @@ Para cada endpoint crítico:
 ```
 METHOD /path
 Headers: Authorization, Content-Type
-Body: {{ campo: tipo, ... }}
-Response 200: {{ campo: tipo, ... }}
-Response 4XX: {{ error: string, code: string }}
+Body: {{{{ campo: tipo, ... }}}}
+Response 200: {{{{ campo: tipo, ... }}}}
+Response 4XX: {{{{ error: string, code: string }}}}
 ```
 
 ### 5. Modelo de datos
@@ -81,7 +81,7 @@ Esta sección es CRÍTICA para que el Agente Dev no cometa errores. Por cada com
 **Para el Frontend (React/Next.js):**
 - **Estado (State):** Qué variables de estado exactas se necesitan (ej. `const [count, setCount] = useState(0)`).
 - **Efectos (Hooks):** Qué dependencias y lógica exacta va en los `useEffect` o manejadores de eventos (ej. `handleSimulateClick`).
-- **Props e Interfaces:** Si se crea un componente nuevo, define la interfaz TypeScript exacta (ej. `interface CardProps {{ title: string, amount: number }}`).
+- **Props e Interfaces:** Si se crea un componente nuevo, define la interfaz TypeScript exacta (ej. `interface CardProps {{{{ title: string, amount: number }}}}`).
 - **Estilos:** Especifica las clases CSS exactas basadas en el diseño existente (ej. `className="bg-mach-purple text-white rounded-lg p-4"`).
 
 🚨 **Mock-Driven Development (Frontend-Only Architecture):**
@@ -90,7 +90,7 @@ Si el PRD requiere datos de una API o backend:
 - Usa `Promise` con `setTimeout` para simular latencia realista (100-300ms)
 - Retorna datos de prueba estáticos pero realistas
 - La UI debe ser 100% funcional sin un backend real
-- Ejemplo: `const mockCheckFraud = async (amount: number) => {{ return new Promise(resolve => setTimeout(() => resolve({{ isFraud: amount > 10000 }}), 200)); }}`
+- Ejemplo: `const mockCheckFraud = async (amount: number) => {{{{ return new Promise(resolve => setTimeout(() => resolve({{{{ isFraud: amount > 10000 }}}}), 200)); }}}}`
 
 ### 10. Engineering Plan
 Al final del documento DEBES incluir un bloque JSON con el plan de implementación

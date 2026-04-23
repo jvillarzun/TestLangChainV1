@@ -5,7 +5,7 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_ARCHITECT, REPO_BE_NAME, REPO_FE_NAME
+from config.settings import MODEL_ARCHITECT, LLM_PROVIDER_ARCH, LLM_MODEL_ARCH, REPO_BE_NAME, REPO_FE_NAME
 from tools.github_tools import get_repo_context
 
 def _format_context(ctx: dict) -> str:
@@ -42,6 +42,13 @@ def _extract_engineering_plan(content: str) -> str | None:
 def run_arch_node(state: CycleState) -> dict:
     """Nodo ARQ — genera ARQSPECS.md con contexto real de repos GitHub."""
     print("\n🏗️  ARCHITECT-AGENT: Generando ARQSPECS.md...")
+    
+    # Mostrar configuración de LLM
+    print("\n" + "="*80)
+    print(f"🤖 CONFIGURACIÓN LLM ARCHITECT")
+    print(f"   Proveedor: {LLM_PROVIDER_ARCH}")
+    print(f"   Modelo: {LLM_MODEL_ARCH}")
+    print("="*80 + "\n")
 
     feedback = _get_last_feedback(state, "arch")
     if feedback:
@@ -65,11 +72,17 @@ def run_arch_node(state: CycleState) -> dict:
     )
 
     try:
+        # Usar proveedor configurado o fallback a Gemini con MODEL_ARCHITECT
+        provider = LLM_PROVIDER_ARCH
+        model = LLM_MODEL_ARCH if LLM_PROVIDER_ARCH in ["gemini", "openai"] else MODEL_ARCHITECT
+        print(f"   🤖 LLM: {provider} | Modelo: {model}")
+        
         arch_content = llm_invoke(
-            model=MODEL_ARCHITECT,
+            model=model,
             system_prompt=system_prompt,
             user_message="Genera el ARQSPECS.md completo según las instrucciones.",
             stub_content="# ARQSPECS.md stub — TEST_MODE activo",
+            provider=provider,
         )
     except Exception as e:
         print(f"[ARCH-AGENT] Error: {e}")

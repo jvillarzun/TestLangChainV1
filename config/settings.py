@@ -22,6 +22,7 @@ MOCK_EARLY_AGENTS: bool = os.environ.get("MOCK_EARLY_AGENTS", "false").lower() =
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"  # legacy, no usado
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
 GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "") if not TEST_MODE else "test"  # Motor LLM principal
+OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "") if not TEST_MODE else "test"  # OpenAI (opcional)
 
 # Modelos por agente
 MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero y rápido
@@ -32,6 +33,14 @@ MODEL_DEV          = "gemini-2.5-flash"       # generación de código (Gemini 2
 MODEL_QA           = "llama-3.3-70b-versatile"       # testing y QA
 MODEL_INFRA        = "llama-3.3-70b-versatile"       # infraestructura
 MODEL_SECURITY     = "llama-3.3-70b-versatile"       # seguridad
+
+# ── Multi-Provider Support (Arch & Dev) ───────────────────────────────────────
+# Permite cambiar entre "gemini" y "openai" sin tocar código
+LLM_PROVIDER_ARCH  = os.environ.get("LLM_PROVIDER_ARCH", "gemini")     # "gemini" o "openai"
+LLM_MODEL_ARCH     = os.environ.get("LLM_MODEL_ARCH", "gemini-2.5-flash")  # o "gpt-4o-mini", "gpt-4o"
+
+LLM_PROVIDER_DEV   = os.environ.get("LLM_PROVIDER_DEV", "gemini")      # "gemini" o "openai"
+LLM_MODEL_DEV      = os.environ.get("LLM_MODEL_DEV", "gemini-2.5-flash")   # o "gpt-4o-mini", "gpt-4o"
 
 
 # ── Slack ──────────────────────────────────────────────────────────────────────

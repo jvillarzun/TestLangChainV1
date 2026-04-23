@@ -63,9 +63,16 @@ def create_llm(model: str) -> Any:
     )
 
 
-def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str) -> str:
+def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str, provider: str = "gemini") -> str:
     """
-    Wrapper de llamada LLM con soporte TEST_MODE.
+    Wrapper de llamada LLM con soporte TEST_MODE y multi-provider.
+
+    Args:
+        model: Nombre del modelo (ej. "gemini-2.5-flash" o "gpt-4o-mini")
+        system_prompt: Prompt del sistema
+        user_message: Mensaje del usuario
+        stub_content: Contenido en TEST_MODE
+        provider: "gemini" (default) o "openai"
 
     En TEST_MODE retorna stub_content directamente sin llamar al LLM.
     En modo normal llama al modelo y retorna response.content.
@@ -77,7 +84,30 @@ def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: 
         return stub_content
 
     from langchain_core.messages import SystemMessage, HumanMessage
-    llm = create_llm(model)
+    
+    # Seleccionar proveedor
+    if provider == "gemini":
+        # LÓGICA ORIGINAL DE GEMINI (sin cambios)
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from config.settings import GOOGLE_API_KEY
+        llm = ChatGoogleGenerativeAI(
+            model=model,
+            google_api_key=GOOGLE_API_KEY,
+            temperature=0.2,
+            convert_system_message_to_human=True,
+        )
+    elif provider == "openai":
+        # NUEVA OPCIÓN: OpenAI
+        from langchain_openai import ChatOpenAI
+        from config.settings import OPENAI_API_KEY
+        llm = ChatOpenAI(
+            model=model,
+            api_key=OPENAI_API_KEY,
+            temperature=0.2,
+        )
+    else:
+        raise ValueError(f"Proveedor '{provider}' no soportado. Usa 'gemini' u 'openai'.")
+    
     response = llm.invoke([
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_message),

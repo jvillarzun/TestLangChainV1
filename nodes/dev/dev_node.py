@@ -7,7 +7,7 @@ from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invok
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from tools.github_tools import create_branch_and_push, open_pull_request
-from config.settings import MODEL_DEV, REPO_BE_NAME, REPO_FE_NAME
+from config.settings import MODEL_DEV, LLM_PROVIDER_DEV, LLM_MODEL_DEV, REPO_BE_NAME, REPO_FE_NAME
 
 # Flag para habilitar validación de build (requiere setup adicional)
 ENABLE_BUILD_VALIDATION = os.environ.get("ENABLE_BUILD_VALIDATION", "false").lower() == "true"
@@ -16,23 +16,27 @@ MAX_HEALING_ATTEMPTS = 3
 def _parse_generated_files(content: str) -> list[dict]:
     """
     Extrae archivos usando el NUEVO FORMATO de bloques Markdown.
-    Busca patrones: ## FILE: {repo}/{path} seguido de ```{lang} ... ```
+    Busca patrones: ## FILE: {path} seguido de ```{lang} ... ```
+    Frontend-Only: todos los archivos se asumen del repo frontend.
     Retorna lista de dicts: [{"repo": ..., "path": ..., "content": ...}]
     """
     print(f"\n🔍 [DEV Parser] Parseando archivos con NUEVO formato Markdown...")
     print(f"   Longitud del contenido: {len(content)} chars")
     
     files = []
-    # Patrón: ## FILE: backend/src/file.js\n```javascript\n...código...\n```
-    pattern = r"##\s*FILE:\s*([^/\s]+)/([^\n]+)\s*```[a-z]*\s*\n(.*?)\n```"
+    # Patrón actualizado: ## FILE: src/app/page.tsx (sin prefijo de repo)
+    # Captura: path completo + código
+    pattern = r"##\s*FILE:\s*([^\n]+?)\s*\n```[a-z]*\s*\n(.*?)\n```"
     matches = re.finditer(pattern, content, re.DOTALL | re.IGNORECASE)
     
     for match in matches:
-        repo = match.group(1).strip()
-        path = match.group(2).strip()
-        file_content = match.group(3)
+        path = match.group(1).strip()
+        file_content = match.group(2)
         
-        print(f"   ✅ Encontrado: {repo}/{path} ({len(file_content)} chars)")
+        # Frontend-Only Architecture: todo es frontend
+        repo = "frontend"
+        
+        print(f"   ✅ Encontrado: {path} ({len(file_content)} chars)")
         
         files.append({
             "repo": repo,
@@ -141,7 +145,7 @@ def _self_healing_loop(
     
     print(f"\n🔄 [Self-Healing] Iniciando bucle de auto-sanación (máx {MAX_HEALING_ATTEMPTS} intentos)")
     
-    from nodes.dev.build_validator import setup_repo, validate_frontend_build, validate_backend_build
+    from nodes.dev.build_validator import setup_repo, validate_frontend_build
     
     branch = f"feat/adlc-{state['thread_id'][:8]}"
     current_content = initial_content
@@ -285,6 +289,13 @@ module.exports = express.Router();
 def run_dev_node(state: CycleState) -> dict:
     """Nodo DEV — genera código real y abre PRs en BE y FE repos."""
     print("\n💻 DEV-AGENT: Generando DEVSPECS.md + código para PRs...")
+    
+    # Mostrar configuración de LLM
+    print("\n" + "="*80)
+    print(f"🤖 CONFIGURACIÓN LLM DEV")
+    print(f"   Proveedor: {LLM_PROVIDER_DEV}")
+    print(f"   Modelo: {LLM_MODEL_DEV}")
+    print("="*80 + "\n")
 
     feedback = _get_last_feedback(state, "dev")
     if feedback:
@@ -338,11 +349,17 @@ def run_dev_node(state: CycleState) -> dict:
     print(f"   📦 Contexto total del prompt: {len(system_prompt)} chars")
 
     try:
+        # Usar proveedor configurado o fallback a Gemini con MODEL_DEV
+        provider = LLM_PROVIDER_DEV
+        model = LLM_MODEL_DEV if LLM_PROVIDER_DEV in ["gemini", "openai"] else MODEL_DEV
+        print(f"   🤖 LLM: {provider} | Modelo: {model}")
+        
         dev_content = llm_invoke(
-            model=MODEL_DEV,
+            model=model,
             system_prompt=system_prompt,
             user_message="Genera el DEVSPECS.md completo y el código de TODOS los archivos usando el formato de bloques Markdown especificado (## FILE: repo/path). Recuerda: CERO placeholders, CERO comentarios vacíos, código COMPLETO y funcional.",
             stub_content="# DEVSPECS.md stub — TEST_MODE activo",
+            provider=provider,
         )
     except Exception as e:
         print(f"[DEV-AGENT] Error LLM: {e}")

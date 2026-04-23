@@ -51,23 +51,23 @@ Este es el plan que DEBES seguir al pie de la letra. Genera el código completo 
 **Ejemplo de mock correcto:**
 ```typescript
 // src/services/mockApi.ts
-export const mockCheckFraud = async (amount: number): Promise<{{ isFraud: boolean }}> => {{
-  return new Promise((resolve) => {{
-    setTimeout(() => {{
-      resolve({{ isFraud: amount > 10000 }});
-    }}, 200); // Simula latencia de red
-  }});
-}};
+export const mockCheckFraud = async (amount: number): Promise<{{{{ isFraud: boolean }}}}> => {{{{
+  return new Promise((resolve) => {{{{
+    setTimeout(() => {{{{
+      resolve({{{{ isFraud: amount > 10000 }}}});
+    }}}}, 200); // Simula latencia de red
+  }}}});
+}}}};
 ```
 
 **Uso en componente:**
 ```typescript
-import {{ mockCheckFraud }} from '@/services/mockApi';
+import {{{{ mockCheckFraud }}}} from '@/services/mockApi';
 
-const handleCheck = async () => {{
+const handleCheck = async () => {{{{
   const result = await mockCheckFraud(amount);
   setResult(result);
-}};
+}}}};
 ```
 
 **NUNCA** hagas llamadas reales a endpoints externos o uses URLs de API real en el código.
@@ -144,7 +144,7 @@ código completo aquí
 
 **EJEMPLO DE FORMATO CORRECTO:**
 ```markdown
-## FILE: backend/src/routes/api.js
+## FILE: src/routes/api.js
 ```javascript
 const express = require('express');
 const router = express.Router();
@@ -160,73 +160,71 @@ module.exports = router;
 5. NO usar formato JSON `{{"files": [...]}}`
 6. NO agregar explicaciones entre archivos — solo header + código
 
+🚨 **REGLA DE RUTAS (CRÍTICA):**
+El nombre del archivo en el bloque Markdown DEBE SER EXACTAMENTE la ruta relativa desde la raíz del repositorio.
+- ❌ **INCORRECTO:** `## FILE: frontend/src/app/page.tsx` (NO agregar prefijo "frontend/")
+- ❌ **INCORRECTO:** `## FILE: mach-frontend-test-hackathon/src/app/page.tsx` (NO usar nombre completo del repo)
+- ❌ **INCORRECTO:** `## FILE: {repo_fe_name}/src/app/page.tsx` (NO usar variables)
+- ✅ **CORRECTO:** `## FILE: src/app/page.tsx` (ruta relativa exacta)
+- ✅ **CORRECTO:** `## FILE: src/components/Counter.tsx` (para archivos nuevos)
+
+**¿Por qué es crítico?** El parser extrae la ruta y la usa directamente para crear archivos en GitHub. Si agregas prefijos incorrectos, crearás carpetas anidadas que romperán la compilación de Next.js/Turbopack.
+
 **Si no sigues este formato exacto, el parser NO podrá extraer los archivos y el ciclo fallará.**
 
 **Ejemplo completo de formato:**
 
 ```
-## FILE: backend/src/routes/fraud.js
-```javascript
-const express = require('express');
-const router = express.Router();
-const detectFraud = require('../services/fraudDetection');
-
-router.post('/check', async (req, res) => {{
-  try {{
-    const transaction = req.body;
-    if (!transaction || !transaction.amount) {{
-      return res.status(400).json({{{{ error: 'Invalid transaction' }}}});
-    }}
-    const result = await detectFraud(transaction);
-    res.json(result);
-  }}}} catch (err) {{
-    console.error('Fraud check failed:', err);
-    res.status(500).json({{{{ error: 'Internal error' }}}});
-  }}
-}});
-
-module.exports = router;
+## FILE: src/services/mockApi.ts
+```typescript
+export const mockCheckFraud = async (amount: number): Promise<{{{{ isFraud: boolean }}}}> => {{{{
+  return new Promise((resolve) => {{{{
+    setTimeout(() => {{{{
+      resolve({{{{ isFraud: amount > 10000 }}}});
+    }}}}, 200);
+  }}}});
+}}}};
 ```
 ```
 
 ```
-## FILE: frontend/src/app/fraud/page.tsx
+## FILE: src/app/fraud/page.tsx
 ```tsx
 'use client';
-import {{{{ useState }}}} from 'react';
-import {{{{ checkFraud }}}} from '@/lib/api';
+import {{{{{{ useState }}}}}} from 'react';
+import {{{{{{ mockCheckFraud }}}}}} from '@/services/mockApi';
 
-export default function FraudPage() {{
+export default function FraudPage() {{{{
   const [amount, setAmount] = useState('');
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<{{{{ isFraud: boolean }}}} | null>(null);
 
-  const handleCheck = async () => {{
-    if (!amount || parseFloat(amount) <= 0) {{
+  const handleCheck = async () => {{{{
+    if (!amount || parseFloat(amount) <= 0) {{{{
       alert('Invalid amount');
       return;
-    }}
-    try {{
-      const data = await checkFraud({{{{ amount: parseFloat(amount) }}}});
+    }}}}
+    try {{{{
+      const data = await mockCheckFraud(parseFloat(amount));
       setResult(data);
-    }}}} catch (err) {{
+    }}}}}} catch (err) {{{{
       console.error(err);
       alert('Error checking fraud');
-    }}
-  }};
+    }}}}
+  }}}};
 
   return (
     <div className="p-4">
       <h1>Fraud Detection</h1>
       <input 
         type="number" 
-        value={{{{amount}}}} 
-        onChange={{{{(e) => setAmount(e.target.value)}}}} 
+        value={{{{{{amount}}}}}} 
+        onChange={{{{{{(e) => setAmount(e.target.value)}}}}}} 
       />
-      <button onClick={{{{handleCheck}}}}>Check</button>
-      {{{{result && <pre>{{{{JSON.stringify(result, null, 2)}}}}</pre>}}}}
+      <button onClick={{{{{{handleCheck}}}}}}>Check</button>
+      {{{{{{result && <pre>{{{{{{JSON.stringify(result, null, 2)}}}}}}</pre>}}}}}}
     </div>
   );
-}}
+}}}}
 ```
 ```
 

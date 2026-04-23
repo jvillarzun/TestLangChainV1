@@ -1,203 +1,302 @@
 # MACH Race 2026 - MACH-ORCHESTRATOR
 
-Orquestador agéntico del ciclo ADLC para Hackathon MACHBank usando LangGraph, FastAPI, Slack, Jira y Streamlit (hasta el momento).
+**Orquestador agéntico del ciclo ADLC (Análisis, Diseño, Desarrollo, Lanzamiento y Cierre)** para MACHBank Hackathon.
 
-El proyecto ejecuta un flujo de desarrollo por fases con Human-in-the-Loop (HITL) entre entregables. Cada fase genera artefactos, notifica revisores por Slack, pausa el grafo con checkpoints y reanuda la ejecución cuando una persona aprueba o rechaza el resultado.
+Sistema de IA multi-agente que automatiza el desarrollo de software desde el PRD hasta el código desplegable, con checkpoints de aprobación humana vía Slack, validación automática de builds, y creación de Pull Requests en GitHub.
 
-## Qué hace
+---
 
-- Orquesta un ciclo ADLC con LangGraph y estado persistente por `thread_id`
-- Ejecuta agentes especializados por fase: PRD, UX, ARQ, DEV, QA, INFRA y SEC
-- Usa checkpoints HITL con `interrupt()` para aprobación humana vía Slack
-- Crea y actualiza tickets en Jira durante el ciclo
-- Publica entregables Markdown en `outputs/`
-- Expone un dashboard en Streamlit para inspeccionar el estado del ciclo
+## 🎯 ¿Qué hace este proyecto?
 
-## Flujo del ciclo
+**MACH-ORCHESTRATOR** es un sistema de desarrollo de software automatizado que:
 
-El ciclo es completamente secuencial. Cada agente tiene su propio checkpoint HITL independiente:
+1. **Orquesta 7 agentes especializados** usando LangGraph para generar artefactos de desarrollo
+2. **Implementa Human-in-the-Loop (HITL)** con checkpoints de aprobación vía Slack
+3. **Genera código real** y crea Pull Requests en GitHub automáticamente
+4. **Valida builds** con auto-sanación: detecta errores de compilación y los corrige iterativamente
+5. **Integra con Jira** para tracking de tareas y sincronización de estado
+6. **Expone un dashboard en tiempo real** (Vue.js) para monitorear el progreso del ciclo
 
-```text
-START
-  → orchestrator_init
-  → run_prd   → hitl_notify_prd  → hitl_prd
-  → run_ux    → hitl_notify_ux   → hitl_ux
-  → run_arch  → hitl_notify_arch → hitl_arch
-  → run_dev   → hitl_notify_dev  → hitl_dev
-  → run_qa    → hitl_notify_qa   → hitl_qa
-  → run_infra → hitl_notify_infra → hitl_infra
-  → run_sec   → hitl_notify_sec  → hitl_sec
-  → finalize
-  → END
+---
+
+## 🏗️ Arquitectura Frontend-Only
+
+El proyecto genera **únicamente aplicaciones frontend** (Next.js, React, Vue.js) con **Mock-Driven Development**:
+
+- ✅ **Frontend real**: Next.js 15 con App Router, TypeScript, TailwindCSS
+- ✅ **APIs mockeadas**: Todas las llamadas backend se simulan con `Promise + setTimeout`
+- ✅ **Build validation**: Valida que el código compile (`npm run build`) antes del PR
+- ✅ **Auto-sanación**: Si el build falla, el agente recibe el error y regenera el código
+
+---
+
+## 🤖 Agentes del Ciclo ADLC
+
+| Fase | Agente | Entregable | LLM por Defecto |
+|------|--------|------------|-----------------|
+| **PRD** | Product Manager | `PRDSPECS.md` - Requirements Document | Gemini 2.5 Flash |
+| **UX** | UX Designer | `UXSPECS.md` - Wireframes y User Flows | Gemini 2.5 Flash |
+| **ARQ** | Arquitecto | `ARQSPECS.md` - C4 Diagrams + Engineering Plan | **OpenAI GPT-4o-mini** |
+| **DEV** | Developer | `DEVSPECS.md` + Código + Pull Request | **OpenAI GPT-4o-mini** |
+| **QA** | QA Engineer | `QASPECS.md` - Test Plan | Gemini 2.5 Flash |
+| **INFRA** | DevOps | `INFRASPECS.md` - Deployment Plan | Gemini 2.5 Flash |
+| **SEC** | Security Engineer | `SECSPECS.md` - Security Audit | Gemini 2.5 Flash |
+
+**Multi-Provider Support**: Los agentes **ARQ** y **DEV** pueden usar **Gemini** u **OpenAI** intercambiablemente vía variables de entorno.
+
+---
+
+## 🔄 Flujo del Ciclo HITL
+
+```mermaid
+graph TD
+    START[🚀 START] --> init[orchestrator_init]
+    init --> prd[run_prd]
+    prd --> prd_notify[hitl_notify_prd]
+    prd_notify --> prd_hitl[❓ hitl_prd - interrupt]
+    
+    prd_hitl -->|Approve| ux[run_ux]
+    prd_hitl -->|Reject| prd
+    
+    ux --> ux_notify[hitl_notify_ux]
+    ux_notify --> ux_hitl[❓ hitl_ux - interrupt]
+    
+    ux_hitl -->|Approve| arch[run_arch]
+    ux_hitl -->|Reject| ux
+    
+    arch --> arch_notify[hitl_notify_arch]
+    arch_notify --> arch_hitl[❓ hitl_arch - interrupt]
+    
+    arch_hitl -->|Approve| dev[run_dev]
+    arch_hitl -->|Reject| arch
+    
+    dev --> dev_notify[hitl_notify_dev]
+    dev_notify --> dev_hitl[❓ hitl_dev - interrupt]
+    
+    dev_hitl -->|Approve| qa[run_qa]
+    dev_hitl -->|Reject| dev
+    
+    qa --> qa_notify[hitl_notify_qa]
+    qa_notify --> qa_hitl[❓ hitl_qa - interrupt]
+    
+    qa_hitl -->|Approve| infra[run_infra]
+    qa_hitl -->|Reject| qa
+    
+    infra --> infra_notify[hitl_notify_infra]
+    infra_notify --> infra_hitl[❓ hitl_infra - interrupt]
+    
+    infra_hitl -->|Approve| sec[run_sec]
+    infra_hitl -->|Reject| infra
+    
+    sec --> sec_notify[hitl_notify_sec]
+    sec_notify --> sec_hitl[❓ hitl_sec - interrupt]
+    
+    sec_hitl -->|Approve| final[finalize]
+    sec_hitl -->|Reject| sec
+    
+    final --> END[✅ END]
 ```
 
-Cada checkpoint HITL son dos nodos separados:
+### Mecánica de Checkpoints HITL
 
-- `hitl_notify_{fase}`: envía el DM de Slack y guarda `ts + channel` en el estado. Se ejecuta una sola vez; no se repite en el replay.
-- `hitl_{fase}`: llama a `interrupt()` y espera la decisión. Al reanudar, procesa la respuesta y actualiza `current_phase`.
+Cada fase tiene **2 nodos separados**:
 
-El routing post-HITL usa conditional edges que leen `current_phase`:
-- Si aprueban: `current_phase` avanza → el edge va al siguiente agente.
-- Si rechazan: `current_phase` se mantiene → el edge vuelve al mismo agente con el feedback inyectado.
+1. **`hitl_notify_{fase}`**: Envía DM de Slack con botones Approve/Reject. Guarda `message_ts` en estado.
+2. **`hitl_{fase}`**: Llama a `interrupt()` y pausa el grafo. Cuando el usuario hace click:
+   - **Approve**: `current_phase` avanza → routing va al siguiente agente
+   - **Reject + feedback**: `current_phase` se mantiene → routing vuelve al mismo agente
 
-## Stack
+---
 
-- Python 3.12
-- LangGraph 1.x
-- FastAPI + Uvicorn
-- Slack SDK
-- python-jira
-- Streamlit (dashboard legacy)
-- Vue.js 3 + Vite + TailwindCSS (frontend moderno)
-- Pydantic v2
-- LangChain + Groq
+## 🚀 Stack Tecnológico
 
-## Estructura principal
+### Backend (Python)
+- **LangGraph 1.x**: Orquestación de grafo con estado persistente
+- **FastAPI + Uvicorn**: API REST para webhooks de Slack
+- **LangChain**: Integración con LLMs (Google Gemini, OpenAI)
+- **Pydantic v2**: Validación de esquemas y tipos
+- **Slack SDK**: Notificaciones interactivas y botones
+- **python-jira**: Creación y actualización de tickets
+- **PyGithub**: Creación de Pull Requests automáticos
+- **SQLite**: Persistencia de checkpoints (producción)
+
+### Frontend (Vue.js)
+- **Vue.js 3**: Framework reactivo
+- **Vite**: Bundler y dev server
+- **TailwindCSS**: Estilos utility-first
+- **Chart.js**: Visualización de métricas
+
+### LLMs Soportados
+- **Google Gemini 2.5 Flash** (default): 15 RPM free tier, 32K context
+- **OpenAI GPT-4o/GPT-4o-mini**: Multi-provider para ARQ y DEV
+
+### Infraestructura
+- **Docker + Podman Compose**: Contenedores multi-servicio
+- **Node.js 20**: Build validation dentro del contenedor
+- **Cloudflared**: Tunnel para webhooks locales en desarrollo
+
+---
+
+## 📁 Estructura del Proyecto
 
 ```text
-main.py                    # Punto de entrada del ciclo
-config/settings.py         # Variables de entorno y modelos
-graph/mach_graph.py        # Definición del StateGraph
-state/cycle_state.py       # Estado compartido del ciclo
-api/slack_webhook.py       # Webhook para botones y modales de Slack
-nodes/                     # Nodos del orquestador, agentes e HITL
-tools/slack_tools.py       # Notificaciones y mensajes interactivos
-tools/jira_tools.py        # Integración con Jira
-dashboard/app.py           # Dashboard Streamlit (legacy)
-frontend/                  # Dashboard Vue.js moderno (Race Control)
-outputs/                   # Entregables generados
+MACH-ORCHESTRATOR/
+├── main.py                          # Punto de entrada del ciclo
+├── config/
+│   └── settings.py                  # Variables de entorno centralizadas
+├── graph/
+│   └── mach_graph.py                # Definición del StateGraph (LangGraph)
+├── state/
+│   └── cycle_state.py               # TypedDict del estado compartido
+├── nodes/
+│   ├── orchestrator_node.py         # init, routing, finalize
+│   ├── hitl_node.py                 # Nodos HITL genéricos
+│   ├── helper.py                    # llm_invoke(), load_prompt(), save_output()
+│   ├── prd/
+│   │   ├── prd_node.py              # Agente PRD
+│   │   └── prd_prompt.md            # System prompt editable
+│   ├── ux/...
+│   ├── arch/...
+│   ├── dev/
+│   │   ├── dev_node.py              # Agente DEV con build validation
+│   │   ├── dev_prompt.md            # System prompt con reglas críticas
+│   │   └── build_validator.py       # Validación y auto-sanación de builds
+│   ├── qa/...
+│   ├── infra/...
+│   └── sec/...
+├── tools/
+│   ├── slack_tools.py               # notify_team(), notify_reviewer(), update_hitl_msg()
+│   ├── jira_tools.py                # create_epic/story/task(), update_issue_status()
+│   └── github_tools.py              # get_repo_context(), create_pull_request()
+├── api/
+│   └── slack_webhook.py             # FastAPI: POST /slack/interactive, /deliverables/
+├── dashboard/
+│   └── app.py                       # Streamlit dashboard (legacy)
+├── frontend/                        # Vue.js dashboard moderno (Race Control)
+│   ├── src/
+│   │   ├── components/              # Componentes Vue
+│   │   ├── views/                   # Vistas principales
+│   │   └── App.vue
+│   └── Dockerfile
+├── outputs/                         # Entregables generados (.md + código)
+├── data/                            # SQLite checkpoints (volumen Docker)
+├── docker-compose.yml               # Orquestación multi-contenedor
+├── Dockerfile                       # Imagen Python + Node.js
+├── requirements.txt
+└── .env                             # Variables de entorno (NO commitear)
 ```
 
-## Prerrequisitos
+---
 
-- Python 3.12 instalado
-- Un workspace con este repositorio clonado
-- Credenciales válidas para Groq, Slack y Jira si vas a correr el flujo real
-- `ngrok` o una URL pública equivalente si Slack debe llamar tu webhook local
+## ⚙️ Instalación
 
-## Instalación SIN Docker
+### Opción 1: Docker Compose (Recomendado)
 
 ```bash
+# 1. Clonar el repositorio
+git clone https://github.com/tu-org/mach-orchestrator.git
+cd mach-orchestrator
+
+# 2. Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tus credenciales (ver sección siguiente)
+
+# 3. Levantar servicios
+podman compose up -d --build
+# O con docker:
+docker compose up -d --build
+```
+
+Servicios levantados:
+- **Backend API**: http://localhost:8000
+- **Frontend Dashboard**: http://localhost:5173
+
+### Opción 2: Instalación Local (Sin Docker)
+
+```bash
+# 1. Crear entorno virtual Python 3.12
 python3.12 -m venv .venv
 source .venv/bin/activate
+
+# 2. Instalar dependencias
 pip install -r requirements.txt
-```
 
-## Configuración
-
-Crea tu archivo `.env` a partir del ejemplo:
-
-```bash
+# 3. Configurar .env
 cp .env.example .env
+# Editar .env con tus credenciales
+
+# 4. Instalar Node.js 20+ (para build validation)
+# macOS: brew install node@20
+# Ubuntu: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+#         sudo apt-get install -y nodejs
 ```
 
-### Variables obligatorias
+---
 
-Aunque uses `TEST_MODE=true`, hoy el proyecto importa varias variables de Slack y Jira en `config/settings.py` al arrancar. Por eso debes definirlas igual para evitar errores de importación.
+## 🔐 Configuración de Variables de Entorno
+
+### Variables Obligatorias
 
 ```env
-GROQ_API_KEY=gsk_...
+# ── LLMs ──────────────────────────────────────────────
+GOOGLE_API_KEY=AIza...              # https://aistudio.google.com/app/apikey
+OPENAI_API_KEY=sk-proj-...          # https://platform.openai.com/api-keys
 
+# ── Multi-Provider (Arch & Dev) ───────────────────────
+LLM_PROVIDER_ARCH=openai            # "gemini" o "openai"
+LLM_MODEL_ARCH=gpt-4o-mini          # o "gemini-2.5-flash"
+LLM_PROVIDER_DEV=openai
+LLM_MODEL_DEV=gpt-4o-mini
+
+# ── Slack ─────────────────────────────────────────────
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_SIGNING_SECRET=...
 SLACK_TEAM_CHANNEL=C0XXXXXXX
-SLACK_USER_PO=U0XXXXXXX
+SLACK_USER_PO=U0XXXXXXX             # IDs de usuarios por rol
 SLACK_USER_ARCHITECT=U0YYYYYYY
 SLACK_USER_DEV_LEAD=U0ZZZZZZZ
 SLACK_USER_QA_LEAD=U0AAAAAAA
 SLACK_USER_DEVOPS=U0BBBBBBB
 
+# ── Jira ──────────────────────────────────────────────
 JIRA_SERVER=https://your-org.atlassian.net
-JIRA_EMAIL=your-email@machbank.com
+JIRA_EMAIL=your@email.com
 JIRA_API_TOKEN=ATATT...
 JIRA_PROJECT_KEY=MACH
 
-WEBHOOK_BASE_URL=http://localhost:8000
-WEBHOOK_PORT=8000
-DASHBOARD_URL=http://localhost:8501
+# ── GitHub ────────────────────────────────────────────
+GITHUB_TOKEN=ghp_...                # Personal Access Token con repo scope
+GITHUB_USERNAME=your-username
+REPO_FE_NAME=mach-frontend-test-hackathon
 ```
 
-### Variables recomendadas para desarrollo
+### Variables de Control
 
 ```env
-TEST_MODE=true
-CHECKPOINTER=memory
-```
+# TEST_MODE=true → Agentes usan stubs, NO llaman al LLM
+TEST_MODE=false
 
-### Variables recomendadas para desarrollo con persistencia y dashboard
+# MOCK_EARLY_AGENTS=true → PRD y UX usan archivos estáticos
+MOCK_EARLY_AGENTS=false
 
-```env
-TEST_MODE=true
+# ENABLE_BUILD_VALIDATION=true → Dev Agent valida npm run build
+ENABLE_BUILD_VALIDATION=true
+
+# CHECKPOINTER: "memory" (dev) o "sqlite" (prod con persistencia)
 CHECKPOINTER=sqlite
-SQLITE_PATH=./mach_cycle.db
+SQLITE_PATH=/app/data/mach_cycle.db
 ```
 
-### LangSmith
+### Configuración de Webhook (Desarrollo Local)
 
-Opcional, pero útil para observabilidad:
-
-```env
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=ls__...
-LANGCHAIN_PROJECT=mach-orchestrator
-```
-
-## Cómo correr el proyecto
-
-### Opción 1: flujo normal en dos terminales
-
-Terminal 1, webhook de Slack:
+Para que Slack pueda enviar payloads a tu máquina local:
 
 ```bash
-source .venv/bin/activate
-uvicorn api.slack_webhook:app --reload --port 8000
-```
+# Instalar cloudflared
+# macOS: brew install cloudflare/cloudflare/cloudflared
+# Windows: winget install Cloudflare.cloudflared
 
-Terminal 2, ciclo principal:
-
-```bash
-source .venv/bin/activate
-python main.py
-```
-
-Qué ocurre:
-
-- `python main.py` crea un `thread_id`
-- Inicializa el estado del ciclo
-- Construye el grafo de LangGraph
-- Corre hasta el primer checkpoint HITL
-- Envía un DM de Slack al revisor de la fase
-- Queda pausado hasta recibir aprobación o rechazo
-
-### Opción 2: webhook y ciclo en un solo proceso
-
-```bash
-source .venv/bin/activate
-python main.py both
-```
-
-Esto levanta el webhook en background y luego arranca el ciclo.
-
-### Opción 3: solo webhook
-
-```bash
-source .venv/bin/activate
-python main.py webhook
-```
-
-### Opción 4: con Docker Compose (recomendado para demo/producción)
-
-Levanta todos los servicios en contenedores:
-
-```bash
-docker-compose up -d --build
-```
-
-Esto arranca:
-
-- **mach-api**: FastAPI backend en puerto 8000
-- **mach-frontend**: Vue.js frontend (Race Control) en puerto 5173
-- **sqlite volume**: volumen compartido `mach-data` para persistencia
+# Levantar tunnel (automático con start_dev.sh)
 
 Acceso a los servicios:
 
