@@ -301,3 +301,69 @@ def open_pull_request(
         import traceback
         print(f"❌ [GitHub] Stack trace:\n{traceback.format_exc()}")
         return None
+
+
+# ── get_pr_ci_status ──────────────────────────────────────────────────────────
+
+def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, Any]:
+    """
+    Obtiene el estado de CI/CD de un Pull Request.
+
+    Args:
+        repo_name: Nombre del repositorio (ej: 'mach-frontend-test-hackathon')
+        pr_url: URL del PR (ej: 'https://github.com/user/repo/pull/42')
+
+    Returns:
+        dict con keys: 'state', 'summary', 'checks'
+        - state: 'success' | 'failure' | 'pending' | 'unknown'
+        - summary: texto resumen del CI
+        - checks: lista de {name, status, conclusion}
+    """
+    try:
+        repo = _get_repo(repo_name)
+
+        # Extraer número del PR desde la URL
+        pr_number = int(pr_url.rstrip("/").split("/")[-1])
+        pr = repo.get_pull(pr_number)
+
+        # Obtener checks del último commit
+        last_commit = pr.get_commits().reversed[0]
+        check_runs = last_commit.get_check_runs()
+
+        checks = []
+        for run in check_runs:
+            checks.append({
+                "name": run.name,
+                "status": run.status,
+                "conclusion": run.conclusion,
+            })
+
+        if not checks:
+            return {
+                "state": "unknown",
+                "summary": f"PR #{pr_number}: sin checks de CI configurados.",
+                "checks": [],
+            }
+
+        all_conclusions = [c["conclusion"] for c in checks if c["conclusion"]]
+        if all(c == "success" for c in all_conclusions):
+            state = "success"
+        elif any(c == "failure" for c in all_conclusions):
+            state = "failure"
+        elif any(c["status"] != "completed" for c in checks):
+            state = "pending"
+        else:
+            state = "unknown"
+
+        passed = sum(1 for c in all_conclusions if c == "success")
+        total = len(checks)
+        summary = f"PR #{pr_number}: CI {state} ({passed}/{total} checks passed)"
+
+        return {"state": state, "summary": summary, "checks": checks}
+
+    except Exception as e:
+        return {
+            "state": "unknown",
+            "summary": f"No se pudo obtener CI status: {e}",
+            "checks": [],
+        }
