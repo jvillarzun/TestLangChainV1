@@ -20,7 +20,7 @@ def run_security_node(state: CycleState) -> dict:
         arch_content=state.get("arch_content") or "",
         dev_content=state.get("dev_content") or "",
         feedback=feedback or "Sin feedback previo.",
-        orchestrator_instructions=get_phase_instructions(state, "security") or "Sin instrucciones adicionales.",
+        orchestrator_instructions=get_phase_instructions(state, "sec") or "Sin instrucciones adicionales.",
     )
 
     try:

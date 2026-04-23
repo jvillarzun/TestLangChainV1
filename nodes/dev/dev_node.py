@@ -107,7 +107,7 @@ def _get_modify_files_context(github_plan: str, repo_name: str) -> str:
         return ""
     try:
         plan = json.loads(github_plan)
-        steps = plan.get("steps", [])
+        steps = [s for s in plan.get("steps", []) if s.get("repo", "frontend") == "frontend"]
         all_paths = [s["file"] for s in steps if s.get("file")]
         action_map = {s["file"]: s.get("action", "CREATE").upper() for s in steps if s.get("file")}
     except (json.JSONDecodeError, KeyError):
@@ -143,42 +143,42 @@ def _get_modify_files_context(github_plan: str, repo_name: str) -> str:
 
 def _parse_generated_files(content: str) -> list[dict]:
     """
-    Extrae el bloque JSON GENERATED_FILES del output del LLM.
-    Retorna lista de dicts: [{"repo": ..., "path": ..., "content": ...}]
+    Extrae archivos del output del LLM. Intenta dos formatos en orden:
+      1. Delimitadores <<<FILE: path>>> ... <<<ENDFILE>>> (preferido — sin JSON escaping)
+      2. Bloque JSON {"files": [...]} (fallback — por si el LLM usa el formato antiguo)
     """
-    print(f"\n🔍 [DEV Parser] Buscando bloque GENERATED_FILES en respuesta LLM...")
-    print(f"   Longitud del contenido: {len(content)} chars")
-    
+    print(f"\n🔍 [DEV Parser] Buscando archivos en respuesta LLM ({len(content)} chars)...")
+
+    # ── Formato 1: delimitadores ───────────────────────────────────────────────
+    matches = re.findall(r"<<<FILE:\s*(.+?)>>>(.*?)<<<ENDFILE>>>", content, re.DOTALL)
+    if matches:
+        files = []
+        for path, file_content in matches:
+            path = path.strip()
+            file_content = file_content.strip()
+            files.append({"repo": "frontend", "path": path, "content": file_content})
+            print(f"   ✔ [delimitador] {path} ({len(file_content)} chars)")
+        print(f"✅ [DEV Parser] {len(files)} archivo(s) extraídos via <<<FILE>>>")
+        return files
+
+    # ── Formato 2: JSON fallback ───────────────────────────────────────────────
+    print(f"⚠️  [DEV Parser] No se encontraron <<<FILE>>> — intentando fallback JSON...")
     match = re.search(r"```json\s*(\{.*?\"files\".*?\})\s*```", content, re.DOTALL)
     if not match:
-        print(f"❌ [DEV Parser] NO se encontró bloque ```json con 'files'")
-        # Intentar buscar cualquier bloque JSON
-        alt_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
-        if alt_match:
-            print(f"⚠️  [DEV Parser] Se encontró un bloque JSON pero sin clave 'files'")
-            print(f"   Primeros 200 chars: {alt_match.group(1)[:200]}")
-        else:
-            print(f"❌ [DEV Parser] NO se encontró ningún bloque ```json")
+        print(f"❌ [DEV Parser] Ningún formato reconocido — no se generarán PRs")
         return []
-    
-    print(f"✅ [DEV Parser] Bloque JSON encontrado")
-    json_str = match.group(1)
-    print(f"   Primeros 200 chars: {json_str[:200]}...")
-    
+
     try:
-        data = json.loads(json_str)
-        files = data.get("files", [])
-        print(f"✅ [DEV Parser] JSON parseado exitosamente")
-        print(f"   Archivos encontrados: {len(files)}")
-        for i, f in enumerate(files, 1):
-            repo = f.get("repo", "SIN REPO")
-            path = f.get("path", "SIN PATH")
-            content_len = len(f.get("content", ""))
-            print(f"   {i}. Repo: {repo}, Path: {path}, Content: {content_len} chars")
+        data = json.loads(match.group(1))
+        all_files = data.get("files", [])
+        files = [f for f in all_files if f.get("repo", "frontend") != "backend"]
+        skipped = len(all_files) - len(files)
+        print(f"✅ [DEV Parser] JSON fallback: {len(files)} archivo(s) | ignorados backend: {skipped}")
+        for f in files:
+            print(f"   ✔ [json] {f.get('path', '?')} ({len(f.get('content', ''))} chars)")
         return files
     except json.JSONDecodeError as e:
-        print(f"❌ [DEV Parser] ERROR parseando JSON: {e}")
-        print(f"   JSON problemático (primeros 500 chars): {json_str[:500]}")
+        print(f"❌ [DEV Parser] JSON inválido: {e}")
         return []
 
 

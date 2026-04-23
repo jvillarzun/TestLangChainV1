@@ -85,14 +85,14 @@ concreto sobre los repositorios reales. Usa exactamente este formato:
 {{
   "steps": [
     {{
-      "repo": "backend",
-      "file": "src/routes/example.js",
+      "repo": "frontend",
+      "file": "src/app/example/page.tsx",
       "action": "CREATE",
       "description": "Explicación técnica de qué hace este archivo y por qué"
     }},
     {{
       "repo": "frontend",
-      "file": "src/app/example/page.tsx",
+      "file": "src/app/other/component.tsx",
       "action": "MODIFY",
       "description": "Explicación técnica del cambio necesario"
     }}
@@ -100,7 +100,7 @@ concreto sobre los repositorios reales. Usa exactamente este formato:
 }}
 ```
 
-Valores válidos para `repo`: `"backend"` o `"frontend"`.
+Valor válido para `repo`: únicamente `"frontend"` — no hay repositorio backend.
 Valores válidos para `action`: `"CREATE"` o `"MODIFY"`.
 
 **⛔ REGLA CRÍTICA — clasificación CREATE vs MODIFY:**
@@ -113,6 +113,19 @@ Antes de asignar `action` a cada step, consulta el árbol de archivos de la secc
 
 Cada step debe referenciar rutas reales del árbol de archivos provisto arriba.
 Para nuevos archivos, usa rutas coherentes con la estructura existente del proyecto.
+
+**⛔ REGLA CRÍTICA — React / Next.js: Server Components vs Client Components:**
+
+Antes de planear cualquier cambio en archivos `.tsx` / `.jsx` de Next.js:
+
+1. Revisa si el archivo tiene `'use client'` como primera línea.
+2. Si el cambio requiere `useState`, `useEffect`, `useCallback`, `useRef`, o manejadores de eventos (`onClick`, `onChange`, `onSubmit`, etc.):
+   - Archivo **YA TIENE** `'use client'` → puedes agregar hooks directamente en ese archivo.
+   - Archivo **NO TIENE** `'use client'` → **NUNCA** agregues hooks directamente. Elige:
+     - **Opción A (preferida):** crea un nuevo componente Client (`'use client'` al inicio) y úsalo dentro del archivo existente — mínima superficie de cambio.
+     - **Opción B:** agrega `'use client'` al archivo existente SOLO si es inevitable y documentas el impacto en el ADR.
+3. `src/app/page.tsx` y `src/app/layout.tsx` son **Server Components por defecto** en Next.js 13+. Rara vez deben convertirse a Client. **Siempre prefiere crear un componente Client separado.**
+4. Si un archivo en el árbol ya tiene `'use client'` (visible en el contexto de archivos clave), puedes modificarlo con hooks sin problema.
 
 ## Reglas de output
 

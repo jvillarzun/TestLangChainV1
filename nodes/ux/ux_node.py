@@ -2,16 +2,38 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_UX
+from tools.github_tools import get_repo_context
+from config.settings import MODEL_UX, REPO_FE_NAME
+
+
+def _extract_component_list(repo_tree: list[str]) -> str:
+    """Extrae paths que parecen ser componentes UI del árbol del repo."""
+    component_paths = [
+        p for p in repo_tree
+        if any(seg in p.lower() for seg in [
+            "component", "componente", "widget", "screen", "view",
+            "page", "layout", "ui/", "/ui", "atoms", "molecules",
+        ])
+    ]
+    if not component_paths:
+        return "No se detectaron componentes en el repositorio."
+    return "\n".join(f"  {p}" for p in component_paths[:60])
 
 
 def run_ux_node(state: CycleState) -> dict:
-    """Nodo UX — Gemini genera UXSPECS.md desde PRD aprobado."""
+    """Nodo UX — genera UXSPECS.md desde PRD aprobado."""
     print("\n🎨 UX-AGENT: Generando UXSPECS.md...")
 
     feedback = _get_last_feedback(state, "ux")
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
+    print(f"   🗂️  [UX] Leyendo contexto del repositorio {REPO_FE_NAME}...")
+    _repo_ctx = get_repo_context(REPO_FE_NAME)
+    _repo_tree_list = _repo_ctx.get("tree", [])
+    _repo_tree = "\n".join(_repo_tree_list) or "Repositorio vacío o no accesible."
+    _components = _extract_component_list(_repo_tree_list)
+    print(f"   🗂️  [UX] Árbol: {len(_repo_tree_list)} archivos")
 
     system_prompt = load_prompt(
         "ux",
@@ -19,6 +41,9 @@ def run_ux_node(state: CycleState) -> dict:
         challenge_type=state["challenge_type"],
         challenge_description=state["challenge_description"],
         prd_content=state.get("prd_content") or "",
+        repo_fe_name=REPO_FE_NAME,
+        repo_tree=_repo_tree,
+        existing_components=_components,
         feedback=feedback or "Sin feedback previo.",
         orchestrator_instructions=get_phase_instructions(state, "ux") or "Sin instrucciones adicionales.",
     )

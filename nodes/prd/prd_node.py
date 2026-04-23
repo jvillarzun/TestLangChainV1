@@ -2,16 +2,22 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_PRD
+from tools.github_tools import get_repo_context
+from config.settings import MODEL_PRD, REPO_FE_NAME
 
 
 def run_prd_node(state: CycleState) -> dict:
-    """Nodo PRD — Gemini genera PRDSPECS.md desde el challenge."""
+    """Nodo PRD — genera PRDSPECS.md desde el challenge."""
     print("\n📋 PRD-AGENT: Generando PRDSPECS.md...")
 
     feedback = _get_last_feedback(state, "prd")
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
+    print(f"   🗂️  [PRD] Leyendo contexto del repositorio {REPO_FE_NAME}...")
+    _repo_ctx = get_repo_context(REPO_FE_NAME)
+    _repo_tree = "\n".join(_repo_ctx.get("tree", [])) or "Repositorio vacío o no accesible."
+    print(f"   🗂️  [PRD] Árbol: {len(_repo_ctx.get('tree', []))} archivos")
 
     criteria_str = "\n".join(f"  - {c}" for c in state["challenge_success_criteria"])
     system_prompt = load_prompt(
@@ -20,6 +26,8 @@ def run_prd_node(state: CycleState) -> dict:
         challenge_type=state["challenge_type"],
         challenge_description=state["challenge_description"],
         challenge_success_criteria=criteria_str,
+        repo_fe_name=REPO_FE_NAME,
+        repo_tree=_repo_tree,
         feedback=feedback or "Sin feedback previo.",
         orchestrator_instructions=get_phase_instructions(state, "prd") or "Sin instrucciones adicionales.",
     )

@@ -2,16 +2,38 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
-from config.settings import MODEL_QA
+from tools.github_tools import get_pr_ci_status
+from config.settings import MODEL_QA, REPO_FE_NAME
+
+
+def _get_ci_summary(state: CycleState) -> str:
+    """Obtiene el CI status del PR más reciente. No-fatal si falla."""
+    pr_urls: list[str] = list(state.get("dev_pr_urls") or [])
+    first = state.get("dev_pr_url")
+    if first and first not in pr_urls:
+        pr_urls.insert(0, first)
+
+    if not pr_urls:
+        return "No hay PRs abiertos — CI no verificable."
+
+    try:
+        result = get_pr_ci_status(REPO_FE_NAME, pr_urls[0])
+        return result["summary"]
+    except Exception as e:
+        print(f"   ⚠️  [QA] No se pudo obtener CI status: {e}")
+        return f"CI status no disponible: {e}"
 
 
 def run_qa_node(state: CycleState) -> dict:
-    """Nodo QA — Gemini evalúa criterios, genera QASCPECS.md y setea qa_passed."""
+    """Nodo QA — evalúa criterios, verifica CI real, genera QASPECS.md."""
     print("\n🧪 QA-AGENT: Validando criterios de aceptación...")
 
     feedback = _get_last_feedback(state, "qa")
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
+
+    ci_summary = _get_ci_summary(state)
+    print(f"   🔬 CI: {ci_summary[:80]}...")
 
     system_prompt = load_prompt(
         "qa",
@@ -19,6 +41,7 @@ def run_qa_node(state: CycleState) -> dict:
         challenge_type=state["challenge_type"],
         prd_content=state.get("prd_content") or "",
         dev_content=state.get("dev_content") or "",
+        ci_status=ci_summary,
         feedback=feedback or "Sin feedback previo.",
         orchestrator_instructions=get_phase_instructions(state, "qa") or "Sin instrucciones adicionales.",
     )

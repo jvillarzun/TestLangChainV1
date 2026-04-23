@@ -21,6 +21,16 @@ Eres el gate de calidad — si encuentras blockers, el ciclo regresa a Dev.
 
 {dev_content}
 
+## Estado del CI — GitHub Actions
+
+```
+{ci_status}
+```
+
+**Regla:** Si el CI muestra `failure` → el criterio de sign-off de tests falla automáticamente.
+Si muestra `pending` → documenta que el CI aún no terminó y trátalo como riesgo.
+Si muestra `no_ci` → el repo no tiene GitHub Actions configurado — indica en el reporte.
+
 ## Feedback de revisión anterior (si aplica)
 
 {feedback}

@@ -60,7 +60,7 @@ DASHBOARD_URL    = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
 
 
 # ── Checkpointing ──────────────────────────────────────────────────────────────
-CHECKPOINTER     = os.environ.get("CHECKPOINTER", "memory")
+CHECKPOINTER     = os.environ.get("CHECKPOINTER", "sqlite")
 SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
 
 
