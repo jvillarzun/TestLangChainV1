@@ -102,7 +102,17 @@ concreto sobre los repositorios reales. Usa exactamente este formato:
 
 Valores válidos para `repo`: `"backend"` o `"frontend"`.
 Valores válidos para `action`: `"CREATE"` o `"MODIFY"`.
+
+**⛔ REGLA CRÍTICA — clasificación CREATE vs MODIFY:**
+
+Antes de asignar `action` a cada step, consulta el árbol de archivos de la sección "Contexto de Repositorios Actuales":
+
+- Si el archivo **aparece en el árbol** → `"action": "MODIFY"` — el archivo existe, Dev debe preservar su contenido
+- Si el archivo **NO aparece en el árbol** → `"action": "CREATE"` — es un archivo nuevo
+- **NUNCA** uses `CREATE` para un archivo que ya existe en el árbol — si lo haces, Dev sobreescribirá y perderá todo el código existente de ese archivo
+
 Cada step debe referenciar rutas reales del árbol de archivos provisto arriba.
+Para nuevos archivos, usa rutas coherentes con la estructura existente del proyecto.
 
 ## Reglas de output
 

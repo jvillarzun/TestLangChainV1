@@ -5,7 +5,7 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
-from tools.github_tools import create_branch_and_push, open_pull_request
+from tools.github_tools import create_branch_and_push, open_pull_request, get_files_content, get_repo_context
 from config.settings import MODEL_DEV, REPO_FE_NAME
 
 _HTML_SKELETON = """\
@@ -74,13 +74,71 @@ _KEYWORDS: list[tuple[list[str], str]] = [
 ]
 
 
-def _pick_code_reference(challenge_description: str, instructions: str) -> str:
-    """Detecta tipo de output del challenge e inyecta skeleton relevante."""
+def _pick_code_reference(
+    challenge_description: str,
+    instructions: str,
+    repo_key_files: dict | None = None,
+) -> str:
+    """
+    Para brownfield: usa archivos reales del repo como referencia.
+    Para greenfield o repo vacío: usa skeleton según tipo de challenge.
+    """
+    if repo_key_files:
+        lines = ["Archivos clave del repositorio actual (usa como referencia de estructura y estilo):\n"]
+        for path, content in list(repo_key_files.items())[:4]:
+            preview = content[:1200]
+            lines.append(f"### `{path}`\n```\n{preview}\n{'...(truncado)' if len(content) > 1200 else ''}\n```\n")
+        return "\n".join(lines)
+
     text = (challenge_description + " " + instructions).lower()
     for keywords, skeleton in _KEYWORDS:
         if any(k in text for k in keywords):
             return skeleton
     return "Sin referencia de código base — genera desde cero según el ENGINEERING_PLAN."
+
+
+def _get_modify_files_context(github_plan: str, repo_name: str) -> str:
+    """
+    Lee TODOS los archivos del engineering plan que existen en el repo.
+    No filtra por action — ARQ puede etiquetar mal CREATE/MODIFY.
+    Retorna string formateado listo para inyectar en el prompt.
+    """
+    if not github_plan:
+        return ""
+    try:
+        plan = json.loads(github_plan)
+        steps = plan.get("steps", [])
+        all_paths = [s["file"] for s in steps if s.get("file")]
+        action_map = {s["file"]: s.get("action", "CREATE").upper() for s in steps if s.get("file")}
+    except (json.JSONDecodeError, KeyError):
+        return ""
+
+    if not all_paths:
+        return ""
+
+    print(f"   🔍 [DEV] Verificando {len(all_paths)} archivo(s) del plan en GitHub...")
+    contents = get_files_content(repo_name, all_paths)
+
+    if not contents:
+        return ""
+
+    lines = [
+        "⚠️  ARCHIVOS QUE YA EXISTEN en el repositorio — conserva TODO el código original:\n",
+        "**CRÍTICO**: Incluye el contenido completo de cada archivo en GENERATED_FILES.",
+        "Solo agrega/modifica lo necesario. NO elimines funciones ni lógica existente.\n",
+    ]
+    for path, content in contents.items():
+        plan_action = action_map.get(path, "?")
+        lines.append(f"### `{path}` (plan dice: {plan_action} — REAL: EXISTE en repo)\n```\n{content}\n```\n")
+        print(f"   ✔ Existente: {path} ({len(content)} chars) [plan={plan_action}]")
+
+    new_paths = [p for p in all_paths if p not in contents]
+    if new_paths:
+        lines.append("### Archivos NUEVOS (no existen aún — crear desde cero):\n")
+        for p in new_paths:
+            lines.append(f"- `{p}`")
+
+    return "\n".join(lines)
 
 
 def _parse_generated_files(content: str) -> list[dict]:
@@ -192,6 +250,13 @@ def run_dev_node(state: CycleState) -> dict:
 
     github_plan = state.get("github_plan") or ""
 
+    # Contexto real del repositorio — árbol completo + archivos clave
+    print(f"   🗂️  [DEV] Leyendo contexto del repositorio {REPO_FE_NAME}...")
+    _repo_ctx = get_repo_context(REPO_FE_NAME)
+    _repo_tree = "\n".join(_repo_ctx.get("tree", [])) or "Repositorio vacío o no accesible."
+    _repo_key_files = _repo_ctx.get("files", {})
+    print(f"   🗂️  [DEV] Árbol: {len(_repo_ctx.get('tree', []))} archivos | Clave: {list(_repo_key_files.keys())}")
+
     try:
         from rag.rag_helper import get_rag_context
         _rag_query = get_phase_instructions(state, "dev") or f"{state['challenge_name']} {state['challenge_description']}"
@@ -200,7 +265,8 @@ def run_dev_node(state: CycleState) -> dict:
         _rag = None
 
     _instructions = get_phase_instructions(state, "dev") or ""
-    _code_ref     = _pick_code_reference(state["challenge_description"], _instructions)
+    _code_ref     = _pick_code_reference(state["challenge_description"], _instructions, _repo_key_files or None)
+    _modify_ctx   = _get_modify_files_context(github_plan, REPO_FE_NAME)
 
     system_prompt = load_prompt(
         "dev",
@@ -212,6 +278,8 @@ def run_dev_node(state: CycleState) -> dict:
         ux_content=state.get("ux_content") or "",
         github_plan=github_plan,
         repo_fe_name=REPO_FE_NAME,
+        repo_tree=_repo_tree,
+        modify_files_context=_modify_ctx or "Sin archivos existentes a modificar.",
         feedback=feedback or "Sin feedback previo.",
         orchestrator_instructions=_instructions or "Sin instrucciones adicionales.",
         code_reference=_code_ref,

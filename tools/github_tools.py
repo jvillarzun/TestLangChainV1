@@ -69,6 +69,34 @@ def _get_repo(repo_name: str) -> Repository:
     return _gh.get_repo(full_name)
 
 
+# ── get_files_content ────────────────────────────────────────────────────────
+
+def get_files_content(repo_name: str, paths: list[str]) -> dict[str, str]:
+    """
+    Lee el contenido actual de archivos específicos desde default_branch.
+    Retorna {path: contenido} — omite archivos que no existen.
+    """
+    if not paths:
+        return {}
+    try:
+        repo = _get_repo(repo_name)
+        default_branch = repo.default_branch
+        result: dict[str, str] = {}
+        for path in paths:
+            try:
+                cf = repo.get_contents(path, ref=default_branch)
+                if not isinstance(cf, list):
+                    result[path] = cf.decoded_content.decode("utf-8")
+            except UnknownObjectException:
+                pass
+            except Exception as exc:
+                print(f"[GitHub] No se pudo leer {path}: {exc}")
+        return result
+    except Exception as exc:
+        print(f"[GitHub] Error en get_files_content({repo_name}): {exc}")
+        return {}
+
+
 # ── get_repo_context ──────────────────────────────────────────────────────────
 
 def get_repo_context(repo_name: str) -> dict[str, Any]:

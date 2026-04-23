@@ -5,7 +5,6 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_ARCHITECT
 from tools.github_tools import get_repo_context
 from config.settings import MODEL_ARCHITECT, REPO_FE_NAME
 
