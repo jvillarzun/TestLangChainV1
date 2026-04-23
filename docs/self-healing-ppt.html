@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Dev Agent — Self-Healing</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter',sans-serif;background:#0B0F1A;color:#E2E8F0;width:1280px;height:720px;overflow:hidden;display:flex;flex-direction:column;padding:28px 36px;}
+
+  .title{font-size:1.15em;font-weight:800;margin-bottom:2px;}
+  .title span{background:linear-gradient(135deg,#A78BFA,#7C3AED,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .sub{font-size:0.62em;color:#64748B;margin-bottom:18px;}
+
+  /* ── Horizontal pipeline ── */
+  .pipe{display:flex;align-items:flex-start;gap:0;flex:1;}
+
+  /* Node */
+  .n{display:flex;flex-direction:column;align-items:center;width:120px;flex-shrink:0;opacity:0;transform:translateY(16px);}
+  .n.v{opacity:1;transform:translateY(0);transition:all .5s cubic-bezier(.16,1,.3,1);}
+  .n-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3em;border:1.5px solid;position:relative;}
+  .n-icon .step{position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;font-size:.5em;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid;}
+  .n-label{font-size:.65em;font-weight:700;margin-top:6px;text-align:center;line-height:1.2;}
+  .n-desc{font-size:.5em;color:#64748B;text-align:center;margin-top:2px;line-height:1.3;max-width:110px;}
+  .n-tag{font-size:.45em;padding:2px 8px;border-radius:10px;margin-top:5px;font-weight:600;white-space:nowrap;}
+
+  /* Arrow */
+  .arr{display:flex;align-items:center;height:44px;flex-shrink:0;position:relative;}
+  .arr svg{overflow:visible;}
+  .arr-line{stroke-dasharray:40;stroke-dashoffset:40;}
+  .arr-line.anim{animation:drawLine .4s ease-out forwards;}
+  @keyframes drawLine{to{stroke-dashoffset:0;}}
+  .arr-head{opacity:0;}
+  .arr-head.anim{animation:fadeIn .2s ease-out forwards;}
+  @keyframes fadeIn{to{opacity:1;}}
+
+  /* Loop wrapper */
+  .loop{border:2px dashed #F59E0B;border-radius:16px;padding:10px 12px 10px;position:relative;display:flex;align-items:flex-start;gap:0;flex-shrink:0;opacity:0;transform:scale(.95);}
+  .loop.v{opacity:1;transform:scale(1);transition:all .5s cubic-bezier(.16,1,.3,1);}
+  .loop-lbl{position:absolute;top:-10px;left:14px;background:#0B0F1A;padding:0 8px;font-size:.55em;color:#F59E0B;font-weight:700;}
+  .loop-max{position:absolute;top:-10px;right:14px;background:#451A03;color:#FCD34D;padding:1px 8px;border-radius:10px;font-size:.45em;font-weight:600;}
+
+  /* Retry curved arrow */
+  .retry-svg{position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);overflow:visible;}
+  .retry-path{fill:none;stroke:#EF4444;stroke-width:1.5;stroke-dasharray:5 3;opacity:0;}
+  .retry-path.anim{opacity:1;animation:dashAnim 1.2s linear infinite;}
+  @keyframes dashAnim{to{stroke-dashoffset:-16;}}
+  .retry-txt{position:absolute;bottom:-42px;left:50%;transform:translateX(-50%);font-size:.48em;color:#EF4444;font-weight:600;white-space:nowrap;opacity:0;}
+  .retry-txt.anim{opacity:1;transition:opacity .4s;}
+
+  /* Bottom badges */
+  .badges{display:flex;gap:8px;justify-content:center;margin-top:auto;padding-top:10px;}
+  .badge{display:flex;align-items:center;gap:5px;font-size:.5em;padding:4px 10px;border-radius:8px;border:1px solid;opacity:0;transform:translateY(10px);}
+  .badge.v{opacity:1;transform:translateY(0);transition:all .4s cubic-bezier(.16,1,.3,1);}
+
+  /* Stats */
+  .stats{display:flex;gap:10px;justify-content:center;margin-top:8px;}
+  .st{text-align:center;opacity:0;transform:translateY(8px);}
+  .st.v{opacity:1;transform:translateY(0);transition:all .4s cubic-bezier(.16,1,.3,1);}
+  .st .num{font-size:1.1em;font-weight:800;}
+  .st .lbl{font-size:.45em;color:#64748B;}
+
+  .glow{animation:pulseG 3s ease-in-out infinite;}
+  @keyframes pulseG{0%,100%{filter:drop-shadow(0 0 0 transparent);}50%{filter:drop-shadow(0 0 8px rgba(124,58,237,.2));}}
+</style>
+</head>
+<body>
+
+<div class="title">💻 <span>Dev Agent — Self-Healing Architecture</span></div>
+<div class="sub">Detecta errores, diagnostica la causa y se auto-corrige hasta 3 veces antes de entregar al humano</div>
+
+<div class="pipe" id="pipe">
+
+  <!-- 1. LLM -->
+  <div class="n" data-d="0">
+    <div class="n-icon glow" style="background:#2D1B4E;border-color:#8B5CF6;">
+      🤖
+      <div class="step" style="background:#2D1B4E;border-color:#8B5CF6;color:#C4B5FD;">1</div>
+    </div>
+    <div class="n-label">LLM genera<br>código</div>
+    <div class="n-desc">PRD + UX + Arch + Plan + Repo + RAG + Templates</div>
+    <div class="n-tag" style="background:#2D1B4E;color:#C4B5FD;">gpt-4o-mini</div>
+  </div>
+
+  <div class="arr" data-d="300"><svg width="36" height="20"><line class="arr-line" x1="0" y1="10" x2="28" y2="10" stroke="#8B5CF6" stroke-width="2"/><polygon class="arr-head" points="26,6 34,10 26,14" fill="#8B5CF6"/></svg></div>
+
+  <!-- 2. Validator -->
+  <div class="n" data-d="500">
+    <div class="n-icon" style="background:#083344;border-color:#06B6D4;">
+      🔎
+      <div class="step" style="background:#083344;border-color:#06B6D4;color:#67E8F9;">2</div>
+    </div>
+    <div class="n-label">Validador<br>calidad</div>
+    <div class="n-desc">12 patrones lazy: TODO, FIXME, stubs, vacíos</div>
+    <div class="n-tag" style="background:#083344;color:#67E8F9;">dev_validator.py</div>
+  </div>
+
+  <div class="arr" data-d="800"><svg width="36" height="20"><line class="arr-line" x1="0" y1="10" x2="28" y2="10" stroke="#06B6D4" stroke-width="2"/><polygon class="arr-head" points="26,6 34,10 26,14" fill="#06B6D4"/></svg></div>
+
+  <!-- 3. Parser -->
+  <div class="n" data-d="1000">
+    <div class="n-icon" style="background:#451A03;border-color:#F59E0B;">
+      📦
+      <div class="step" style="background:#451A03;border-color:#F59E0B;color:#FCD34D;">3</div>
+    </div>
+    <div class="n-label">Parser<br>archivos</div>
+    <div class="n-desc">## FILE: format + JSON legacy fallback</div>
+    <div class="n-tag" style="background:#451A03;color:#FCD34D;">dual format</div>
+  </div>
+
+  <div class="arr" data-d="1300"><svg width="28" height="20"><line class="arr-line" x1="0" y1="10" x2="20" y2="10" stroke="#F59E0B" stroke-width="2"/><polygon class="arr-head" points="18,6 26,10 18,14" fill="#F59E0B"/></svg></div>
+
+  <!-- LOOP -->
+  <div class="loop" data-d="1500">
+    <div class="loop-lbl">🔄 SELF-HEALING LOOP</div>
+    <div class="loop-max">máx 3</div>
+
+    <div class="n" data-d="1700" style="width:100px;">
+      <div class="n-icon" style="background:#450A0A;border-color:#EF4444;">🚨</div>
+      <div class="n-label" style="color:#FCA5A5;">Error<br>detectado</div>
+      <div class="n-desc">Formato? Build? 0 archivos?</div>
+    </div>
+
+    <div class="arr" data-d="2000"><svg width="28" height="20"><line class="arr-line" x1="0" y1="10" x2="20" y2="10" stroke="#EF4444" stroke-width="2"/><polygon class="arr-head" points="18,6 26,10 18,14" fill="#EF4444"/></svg></div>
+
+    <div class="n" data-d="2200" style="width:100px;">
+      <div class="n-icon" style="background:#451A03;border-color:#F59E0B;">🔧</div>
+      <div class="n-label" style="color:#FCD34D;">Re-invocar<br>LLM</div>
+      <div class="n-desc">Error como feedback → nueva versión</div>
+    </div>
+
+    <div class="arr" data-d="2500"><svg width="28" height="20"><line class="arr-line" x1="0" y1="10" x2="20" y2="10" stroke="#F59E0B" stroke-width="2"/><polygon class="arr-head" points="18,6 26,10 18,14" fill="#F59E0B"/></svg></div>
+
+    <div class="n" data-d="2700" style="width:100px;">
+      <div class="n-icon" style="background:#052E16;border-color:#10B981;">✅</div>
+      <div class="n-label" style="color:#86EFAC;">Re-validar</div>
+      <div class="n-desc">OK → push. Falla → retry</div>
+    </div>
+
+    <!-- Retry arrow -->
+    <svg class="retry-svg" width="200" height="30" viewBox="0 0 200 30">
+      <path class="retry-path" data-d="3000" d="M 160 2 C 120 2, 80 28, 40 28 C 20 28, 10 20, 10 10" marker-end="url(#ra)"/>
+      <defs><marker id="ra" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5" fill="#EF4444"/></marker></defs>
+    </svg>
+    <div class="retry-txt" data-d="3000">↩ retry si falla</div>
+  </div>
+
+  <div class="arr" data-d="3200"><svg width="28" height="20"><line class="arr-line" x1="0" y1="10" x2="20" y2="10" stroke="#10B981" stroke-width="2"/><polygon class="arr-head" points="18,6 26,10 18,14" fill="#10B981"/></svg></div>
+
+  <!-- 4. Push -->
+  <div class="n" data-d="3400">
+    <div class="n-icon" style="background:#052E16;border-color:#10B981;">
+      🐙
+      <div class="step" style="background:#052E16;border-color:#10B981;color:#86EFAC;">4</div>
+    </div>
+    <div class="n-label">GitHub<br>Push + PR</div>
+    <div class="n-desc">Branch → commit → Pull Request auto</div>
+    <div class="n-tag" style="background:#052E16;color:#86EFAC;">auto PR</div>
+  </div>
+
+  <div class="arr" data-d="3700"><svg width="28" height="20"><line class="arr-line" x1="0" y1="10" x2="20" y2="10" stroke="#10B981" stroke-width="2"/><polygon class="arr-head" points="18,6 26,10 18,14" fill="#F59E0B"/></svg></div>
+
+  <!-- 5. HITL -->
+  <div class="n" data-d="3900">
+    <div class="n-icon" style="background:#451A03;border-color:#F59E0B;">
+      ⏸
+      <div class="step" style="background:#451A03;border-color:#F59E0B;color:#FCD34D;">5</div>
+    </div>
+    <div class="n-label">HITL<br>Aprobación</div>
+    <div class="n-desc">Slack DM al Dev Lead. Approve → QA</div>
+    <div class="n-tag" style="background:#451A03;color:#FCD34D;">interrupt()</div>
+  </div>
+
+</div>
+
+<!-- Badges -->
+<div class="badges" id="badges">
+  <div class="badge" data-d="4200" style="border-color:#312E81;color:#A78BFA;background:#0F0B2A;">📚 RAG por agente</div>
+  <div class="badge" data-d="4300" style="border-color:#1E40AF;color:#93C5FD;background:#0C1929;">📐 Templates completos</div>
+  <div class="badge" data-d="4400" style="border-color:#166534;color:#86EFAC;background:#052E16;">🐙 GitHub repo context</div>
+  <div class="badge" data-d="4500" style="border-color:#7C2D12;color:#FDBA74;background:#1C1507;">🔄 Self-healing loop</div>
+  <div class="badge" data-d="4600" style="border-color:#991B1B;color:#FCA5A5;background:#1A0808;">🔎 12 patrones lazy</div>
+</div>
+
+<!-- Stats -->
+<div class="stats" id="stats">
+  <div class="st" data-d="4800"><div class="num" style="color:#8B5CF6;">3</div><div class="lbl">Capas validación</div></div>
+  <div class="st" data-d="4900"><div class="num" style="color:#F59E0B;">3</div><div class="lbl">Auto-correcciones</div></div>
+  <div class="st" data-d="5000"><div class="num" style="color:#06B6D4;">12</div><div class="lbl">Patrones detectados</div></div>
+  <div class="st" data-d="5100"><div class="num" style="color:#10B981;">2</div><div class="lbl">Formatos output</div></div>
+  <div class="st" data-d="5200"><div class="num" style="color:#EC4899;">∞</div><div class="lbl">Reintentos HITL</div></div>
+</div>
+
+<script>
+function go(){
+  document.querySelectorAll('.n').forEach(n=>{setTimeout(()=>n.classList.add('v'),+n.dataset.d||0);});
+  document.querySelectorAll('.loop').forEach(n=>{setTimeout(()=>n.classList.add('v'),+n.dataset.d||0);});
+  document.querySelectorAll('.arr').forEach(a=>{
+    const d=+a.dataset.d||0;
+    setTimeout(()=>{a.querySelector('.arr-line')?.classList.add('anim');setTimeout(()=>a.querySelector('.arr-head')?.classList.add('anim'),300);},d);
+  });
+  document.querySelectorAll('.retry-path').forEach(p=>{setTimeout(()=>p.classList.add('anim'),+p.dataset.d||0);});
+  document.querySelectorAll('.retry-txt').forEach(t=>{setTimeout(()=>t.classList.add('anim'),+t.dataset.d||0);});
+  document.querySelectorAll('.badge').forEach(b=>{setTimeout(()=>b.classList.add('v'),+b.dataset.d||0);});
+  document.querySelectorAll('.st').forEach(s=>{setTimeout(()=>s.classList.add('v'),+s.dataset.d||0);});
+}
+go();
+</script>
+</body>
+</html>
