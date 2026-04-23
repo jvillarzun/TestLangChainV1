@@ -301,3 +301,55 @@ def open_pull_request(
         import traceback
         print(f"❌ [GitHub] Stack trace:\n{traceback.format_exc()}")
         return None
+
+
+# ── get_pr_ci_status ──────────────────────────────────────────────────────────
+
+def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, Any]:
+    """
+    Obtiene el estado de CI/CD checks de un PR.
+    Retorna dict con summary y checks individuales.
+    No-fatal: si falla retorna estado desconocido.
+    """
+    if not _gh:
+        return {"summary": "GitHub no disponible — CI no verificable", "checks": []}
+
+    try:
+        repo = _get_repo(repo_name)
+        # Extraer PR number de la URL
+        pr_number = int(pr_url.rstrip("/").split("/")[-1])
+        pr = repo.get_pull(pr_number)
+        
+        # Obtener checks del último commit
+        last_commit = pr.get_commits().reversed[0]
+        check_runs = last_commit.get_check_runs()
+        
+        checks = []
+        for run in check_runs:
+            checks.append({
+                "name": run.name,
+                "status": run.status,
+                "conclusion": run.conclusion,
+            })
+        
+        if not checks:
+            return {"summary": f"PR #{pr_number}: sin checks de CI configurados", "checks": []}
+        
+        all_passed = all(c["conclusion"] == "success" for c in checks)
+        any_failed = any(c["conclusion"] == "failure" for c in checks)
+        any_pending = any(c["status"] != "completed" for c in checks)
+        
+        if any_pending:
+            summary = f"PR #{pr_number}: CI en progreso ({len(checks)} checks)"
+        elif all_passed:
+            summary = f"PR #{pr_number}: ✅ CI pasó ({len(checks)} checks)"
+        elif any_failed:
+            failed = [c["name"] for c in checks if c["conclusion"] == "failure"]
+            summary = f"PR #{pr_number}: ❌ CI falló en: {', '.join(failed)}"
+        else:
+            summary = f"PR #{pr_number}: CI completado ({len(checks)} checks)"
+        
+        return {"summary": summary, "checks": checks}
+    except Exception as e:
+        print(f"[GitHub] Error obteniendo CI status: {e}")
+        return {"summary": f"Error obteniendo CI: {e}", "checks": []}
