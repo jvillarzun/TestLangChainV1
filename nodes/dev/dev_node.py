@@ -218,19 +218,12 @@ module.exports = express.Router();
             print("   ⚠️  No se encontraron archivos generados - abortando auto-sanación")
             return current_content, generated_files
         
-        be_files = [f for f in generated_files if f.get("repo") == "backend"]
-        fe_files = [f for f in generated_files if f.get("repo") == "frontend"]
-        
-        # ── Validar Backend ──────────────────────────────────────────────
-        be_valid = True
-        be_error = ""
-        if be_files:
-            print(f"\n🔨 [Validando Backend] {len(be_files)} archivos...")
-            be_repo_path = setup_repo(REPO_BE_NAME, branch, be_files)
-            if be_repo_path:
-                be_valid, be_error = validate_backend_build(be_repo_path)
-            else:
-                print("   ⚠️  No se pudo preparar repo backend - saltando validación")
+        # Frontend-Only: Solo procesar archivos del frontend
+        fe_files = [f for f in generated_files if (
+            f.get("repo") == "frontend" or 
+            f.get("repo") == "fe" or 
+            REPO_FE_NAME in f.get("repo", "")
+        )]
         
         # ── Validar Frontend ─────────────────────────────────────────────
         fe_valid = True
@@ -244,7 +237,7 @@ module.exports = express.Router();
                 print("   ⚠️  No se pudo preparar repo frontend - saltando validación")
         
         # ── Resultado ────────────────────────────────────────────────────
-        if be_valid and fe_valid:
+        if fe_valid:
             print(f"\n✅ [Self-Healing] Build validado exitosamente en intento {attempt}!")
             return current_content, generated_files
         
@@ -255,11 +248,7 @@ module.exports = express.Router();
             # Construir mensaje de error
             error_feedback = "## 🚨 ERRORES DE COMPILACIÓN\n\n"
             error_feedback += "Tu código generó los siguientes errores al compilar:\n\n"
-            
-            if not be_valid:
-                error_feedback += f"### Backend Error:\n```\n{be_error[:1000]}\n```\n\n"
-            if not fe_valid:
-                error_feedback += f"### Frontend Error:\n```\n{fe_error[:1000]}\n```\n\n"
+            error_feedback += f"### Frontend Error:\n```\n{fe_error[:1000]}\n```\n\n"
             
             error_feedback += "\n**INSTRUCCIONES:**\n"
             error_feedback += "1. Analiza el error cuidadosamente\n"
@@ -303,26 +292,19 @@ def run_dev_node(state: CycleState) -> dict:
 
     github_plan = state.get("github_plan") or ""
 
-    # ── Leer contexto de repos para modificaciones brownfield ────────────────
-    print("\n📖 [DEV] Leyendo código actual de repositorios para evitar sobreescritura...")
+    # ── Leer contexto del repo Frontend (FRONTEND-ONLY) ──────────────────────
+    print("\n📖 [DEV] Leyendo código actual del repositorio Frontend...")
     from tools.github_tools import get_repo_context
     try:
-        be_ctx = get_repo_context(REPO_BE_NAME)
         fe_ctx = get_repo_context(REPO_FE_NAME)
-        print(f"   ✅ Backend: {len(be_ctx.get('tree', []))} archivos")
         print(f"   ✅ Frontend: {len(fe_ctx.get('tree', []))} archivos")
         
         # Formatear contexto para el LLM
-        be_context = "Árbol: " + str(len(be_ctx.get('tree', []))) + " archivos\nArchivos clave:\n"
-        for path, content in be_ctx.get('files', {}).items():
-            be_context += "\n--- " + path + " ---\n" + content[:2000] + "...\n"
-        
         fe_context = "Árbol: " + str(len(fe_ctx.get('tree', []))) + " archivos\nArchivos clave:\n"
         for path, content in fe_ctx.get('files', {}).items():
             fe_context += "\n--- " + path + " ---\n" + content[:2000] + "...\n"
     except Exception as e:
-        print(f"   ⚠️  No se pudo leer repos (GitHub no disponible): {e}")
-        be_context = "No disponible - GitHub offline"
+        print(f"   ⚠️  No se pudo leer repo (GitHub no disponible): {e}")
         fe_context = "No disponible - GitHub offline"
 
     try:
@@ -340,14 +322,12 @@ def run_dev_node(state: CycleState) -> dict:
         arch_content=state.get("arch_content") or "",
         ux_content=state.get("ux_content") or "",
         github_plan=github_plan,
-        repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
         feedback=feedback or "Sin feedback previo.",
     )
     
     # Inyectar contexto de código actual para evitar sobreescritura
-    system_prompt += "\n\n## 📖 Código Actual de los Repositorios (para MODIFY)\n\n"
-    system_prompt += "### Backend — " + REPO_BE_NAME + "\n" + be_context + "\n\n"
+    system_prompt += "\n\n## 📖 Código Actual del Repositorio Frontend (para MODIFY)\n\n"
     system_prompt += "### Frontend — " + REPO_FE_NAME + "\n" + fe_context + "\n\n"
     system_prompt += "**IMPORTANTE**: Cuando modifiques un archivo existente, DEBES incluir TODO el código actual en tu respuesta, fusionando tus cambios con el contenido original mostrado arriba.\n\n"
     
@@ -384,17 +364,11 @@ def run_dev_node(state: CycleState) -> dict:
     pr_urls: list[str] = []
     preview_url: str | None = None
     
-    # Inicializar listas de archivos (evita UnboundLocalError más adelante)
-    be_files: list[dict] = []
+    # Frontend-Only: Solo procesar archivos del frontend
     fe_files: list[dict] = []
 
     if generated_files:
-        # Filtro robusto: acepta "backend", "be", o el nombre completo del repo
-        be_files = [f for f in generated_files if (
-            f.get("repo") == "backend" or 
-            f.get("repo") == "be" or 
-            REPO_BE_NAME in f.get("repo", "")
-        )]
+        # Filtro robusto: acepta "frontend", "fe", o el nombre completo del repo
         fe_files = [f for f in generated_files if (
             f.get("repo") == "frontend" or 
             f.get("repo") == "fe" or 
@@ -403,18 +377,8 @@ def run_dev_node(state: CycleState) -> dict:
         
         challenge_name = state["challenge_name"]
         
-        print(f"\n📦 [Separación de archivos]")
-        print(f"   Backend: {len(be_files)} archivos")
+        print(f"\n📦 [Frontend-Only Architecture]")
         print(f"   Frontend: {len(fe_files)} archivos")
-
-        if be_files:
-            print(f"\n📤 [Subiendo Backend] {len(be_files)} archivos a {REPO_BE_NAME}...")
-            pr = _push_files_and_open_pr(REPO_BE_NAME, branch, be_files, challenge_name, github_plan)
-            if pr:
-                pr_urls.append(pr)
-                print(f"   ✅ PR backend creado: {pr}")
-            else:
-                print(f"   ⚠️  No se pudo crear PR backend")
 
         if fe_files:
             print(f"\n📤 [Subiendo Frontend] {len(fe_files)} archivos a {REPO_FE_NAME}...")
@@ -424,6 +388,8 @@ def run_dev_node(state: CycleState) -> dict:
                 print(f"   ✅ PR frontend creado: {pr}")
             else:
                 print(f"   ⚠️  No se pudo crear PR frontend")
+        else:
+            print(f"   ⚠️  No se encontraron archivos de frontend - verificar formato del LLM")
     else:
         print("\n⚠️  [Sin archivos generados] No se abrieron PRs")
 

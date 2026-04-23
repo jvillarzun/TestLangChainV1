@@ -30,12 +30,47 @@ Este es el plan que DEBES seguir al pie de la letra. Genera el código completo 
 {github_plan}
 ```
 
-Repositorio Backend: `{repo_be_name}`
-Repositorio Frontend: `{repo_fe_name}`
+🚨 **FRONTEND-ONLY ARCHITECTURE:**
+- **NO EXISTE BACKEND** en este proyecto
+- Repositorio Frontend: `{repo_fe_name}`
+- Cualquier API o dato del backend DEBE ser mockeado en el frontend
 
 ## Feedback de revisión anterior (si aplica)
 
 {feedback}
+
+## 🎭 REGLA CRÍTICA DE MOCK-DRIVEN DEVELOPMENT
+
+**No existe un backend real.** Cualquier llamada a API (fetch/axios) solicitada en el diseño debe ser simulada con **Mocks locales**:
+
+1. **Crear archivo de mocks**: `src/services/mockApi.ts` o similar
+2. **Simular latencia**: Usa `Promise` + `setTimeout` (100-300ms) para realismo
+3. **Datos estáticos**: Retorna objetos JSON con datos de prueba coherentes
+4. **Tipado fuerte**: Define interfaces TypeScript para las respuestas
+
+**Ejemplo de mock correcto:**
+```typescript
+// src/services/mockApi.ts
+export const mockCheckFraud = async (amount: number): Promise<{{ isFraud: boolean }}> => {{
+  return new Promise((resolve) => {{
+    setTimeout(() => {{
+      resolve({{ isFraud: amount > 10000 }});
+    }}, 200); // Simula latencia de red
+  }});
+}};
+```
+
+**Uso en componente:**
+```typescript
+import {{ mockCheckFraud }} from '@/services/mockApi';
+
+const handleCheck = async () => {{
+  const result = await mockCheckFraud(amount);
+  setResult(result);
+}};
+```
+
+**NUNCA** hagas llamadas reales a endpoints externos o uses URLs de API real en el código.
 
 ## 🏆 REGLA DE ORO — ZERO TOLERANCE PARA LAZY CODING
 

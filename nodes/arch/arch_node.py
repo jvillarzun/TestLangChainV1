@@ -47,13 +47,11 @@ def run_arch_node(state: CycleState) -> dict:
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
 
-    # ── Obtener contexto de repos ────────────────────────────────────────────
-    print("   🔍 Obteniendo contexto de repositorios GitHub...")
-    be_ctx = get_repo_context(REPO_BE_NAME)
+    # ── Obtener contexto de repos (FRONTEND-ONLY) ────────────────────────────
+    print("   🔍 Obteniendo contexto del repositorio Frontend...")
     fe_ctx = get_repo_context(REPO_FE_NAME)
-    be_context = _format_context(be_ctx)
     fe_context = _format_context(fe_ctx)
-    print(f"   ✔ BE: {len(be_ctx['tree'])} archivos | FE: {len(fe_ctx['tree'])} archivos")
+    print(f"   ✔ FE: {len(fe_ctx['tree'])} archivos (Frontend-Only Architecture)")
 
     system_prompt = load_prompt(
         "arch",
@@ -62,9 +60,7 @@ def run_arch_node(state: CycleState) -> dict:
         challenge_description=state["challenge_description"],
         prd_content=state.get("prd_content") or "",
         feedback=feedback or "Sin feedback previo.",
-        be_context=be_context,
         fe_context=fe_context,
-        repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
     )
 

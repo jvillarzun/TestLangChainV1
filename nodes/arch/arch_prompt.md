@@ -18,14 +18,12 @@ Usas el modelo C4 y priorizas decisiones explícitas con ADRs.
 
 {feedback}
 
-## Contexto de Repositorios Actuales
+## Contexto del Repositorio Frontend
+
+🚨 **ARQUITECTURA FRONTEND-ONLY**: No existe backend en este proyecto. Cualquier dato o API necesaria debe ser mockeada en el frontend.
 
 Analiza el código existente antes de proponer cambios.
-No propongas cambios que ignoren la estructura actual de los proyectos.
-
-### Backend — `{repo_be_name}`
-
-{be_context}
+No propongas cambios que ignoren la estructura actual del proyecto.
 
 ### Frontend — `{repo_fe_name}`
 
@@ -86,27 +84,33 @@ Esta sección es CRÍTICA para que el Agente Dev no cometa errores. Por cada com
 - **Props e Interfaces:** Si se crea un componente nuevo, define la interfaz TypeScript exacta (ej. `interface CardProps {{ title: string, amount: number }}`).
 - **Estilos:** Especifica las clases CSS exactas basadas en el diseño existente (ej. `className="bg-mach-purple text-white rounded-lg p-4"`).
 
-**Para el Backend (Node/Python):**
-- **Estructura de Clases/Controladores:** Nombres exactos de las funciones (ej. `def calculate_monthly_payment(amount, installments):`).
-- **Flujo Lógico:** Paso a paso del algoritmo matemático o validaciones exactas (ej. "1. Validar que amount > 0. 2. Si cuotas <= 3, interés = 0. 3. Retornar JSON").
-- **Manejo de Errores:** Qué excepciones capturar y qué código HTTP devolver exacto (ej. `return res.status(400).json(...)`).
+🚨 **Mock-Driven Development (Frontend-Only Architecture):**
+Si el PRD requiere datos de una API o backend:
+- DEBES diseñar funciones mock en el frontend (ej. crear `src/services/mockApi.ts`)
+- Usa `Promise` con `setTimeout` para simular latencia realista (100-300ms)
+- Retorna datos de prueba estáticos pero realistas
+- La UI debe ser 100% funcional sin un backend real
+- Ejemplo: `const mockCheckFraud = async (amount: number) => {{ return new Promise(resolve => setTimeout(() => resolve({{ isFraud: amount > 10000 }}), 200)); }}`
 
 ### 10. Engineering Plan
 Al final del documento DEBES incluir un bloque JSON con el plan de implementación
 concreto sobre los repositorios reales. Usa exactamente este formato:
 
 ```json
-{{
-  "steps": [
-    {{
-      "repo": "backend",
-      "file": "src/routes/example.js",
+{{frontend",
+      "file": "src/app/example/page.tsx",
       "action": "CREATE",
       "description": "Explicación técnica de qué hace este archivo y por qué"
     }},
     {{
       "repo": "frontend",
-      "file": "src/app/example/page.tsx",
+      "file": "src/services/mockApi.ts",
+      "action": "CREATE",
+      "description": "Mock API service que simula llamadas al backend con Promises y datos estáticos"
+    }},
+    {{
+      "repo": "frontend",
+      "file": "src/components/Counter.tsx",
       "action": "MODIFY",
       "description": "Explicación técnica del cambio necesario. Integrar al final del componente, conservando imports y lógica existente."
     }}
@@ -114,6 +118,12 @@ concreto sobre los repositorios reales. Usa exactamente este formato:
 }}
 ```
 
+🚨 **FRONTEND-ONLY ARCHITECTURE - REGLA CRÍTICA:**
+- Valor ÚNICO válido para `repo`: **`"frontend"`** (o el nombre completo del repo frontend)
+- **ESTÁ ESTRICTAMENTE PROHIBIDO** usar `"backend"` o `"be"` como valor de repo
+- Valores válidos para `action`: `"CREATE"` o `"MODIFY"`
+- Cada step debe referenciar rutas reales del árbol de archivos del frontend provisto arriba
+- Si necesitas datos de API, DEBES crear archivos mock en el frontend (ej. `src/services/mockApi.ts`)
 Valores válidos para `repo`: `"backend"` o `"frontend"`.
 Valores válidos para `action`: `"CREATE"` o `"MODIFY"`.
 Cada step debe referenciar rutas reales del árbol de archivos provisto arriba.
