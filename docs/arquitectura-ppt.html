@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MACH Race 2026 — Arquitectura ADLC</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter',sans-serif;background:#0B0F1A;color:#E2E8F0;width:1280px;height:720px;overflow:hidden;display:flex;flex-direction:column;padding:24px 32px 16px;}
+
+  .top{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;}
+  .title{font-size:1.2em;font-weight:800;}
+  .title span{background:linear-gradient(135deg,#A78BFA,#7C3AED,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .top-badge{font-size:.5em;color:#64748B;background:#111827;border:1px solid #1F2937;padding:4px 12px;border-radius:8px;}
+
+  /* ── Pipeline row ── */
+  .pipeline{display:flex;align-items:flex-start;justify-content:center;gap:0;margin-bottom:12px;}
+
+  .ag{display:flex;flex-direction:column;align-items:center;width:108px;flex-shrink:0;opacity:0;transform:translateY(14px);}
+  .ag.v{opacity:1;transform:translateY(0);transition:all .5s cubic-bezier(.16,1,.3,1);}
+  .ag-box{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5em;border:1.5px solid;position:relative;transition:box-shadow .3s;}
+  .ag.v .ag-box{animation:glow 3s ease-in-out infinite;}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 transparent;}50%{box-shadow:0 0 14px rgba(124,58,237,.18);}}
+  .ag-name{font-size:.6em;font-weight:700;margin-top:5px;text-align:center;line-height:1.2;}
+  .ag-model{font-size:.42em;padding:2px 7px;border-radius:8px;margin-top:3px;font-weight:600;white-space:nowrap;}
+  .ag-out{font-size:.4em;color:#475569;margin-top:2px;text-align:center;}
+  .hitl-dot{width:6px;height:6px;border-radius:50%;background:#F59E0B;margin-top:4px;}
+
+  /* Arrow */
+  .aw{display:flex;align-items:center;height:56px;flex-shrink:0;}
+  .aw svg{overflow:visible;}
+  .aw-line{stroke-dasharray:30;stroke-dashoffset:30;}
+  .aw-line.anim{animation:draw .35s ease-out forwards;}
+  @keyframes draw{to{stroke-dashoffset:0;}}
+  .aw-head{opacity:0;}
+  .aw-head.anim{animation:fi .2s ease-out forwards;}
+  @keyframes fi{to{opacity:1;}}
+
+  /* ── Middle: 3 columns ── */
+  .mid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;flex:1;min-height:0;}
+
+  .card{background:#111827;border:1px solid #1F2937;border-radius:12px;padding:14px 16px;opacity:0;transform:translateY(12px);}
+  .card.v{opacity:1;transform:translateY(0);transition:all .5s cubic-bezier(.16,1,.3,1);}
+  .card h3{font-size:.72em;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+  .card h3 em{font-size:1.3em;font-style:normal;}
+
+  .item{display:flex;align-items:center;gap:6px;font-size:.55em;color:#94A3B8;padding:3px 0;border-bottom:1px solid #1F2937;}
+  .item:last-child{border-bottom:none;}
+  .item i{font-style:normal;width:16px;text-align:center;font-size:.9em;}
+
+  .tag{display:inline-block;font-size:.48em;padding:2px 8px;border-radius:6px;margin:1px;font-weight:600;}
+  .tp{background:#1E1B4B;color:#C4B5FD;} .tb{background:#172554;color:#93C5FD;} .tg{background:#052E16;color:#86EFAC;}
+  .tk{background:#3B1F2B;color:#F9A8D4;} .ta{background:#451A03;color:#FCD34D;} .tc{background:#083344;color:#67E8F9;}
+  .tr{background:#450A0A;color:#FCA5A5;}
+
+  /* ── Bottom stats ── */
+  .bot{display:flex;gap:10px;justify-content:center;margin-top:auto;padding-top:8px;}
+  .st{text-align:center;opacity:0;transform:translateY(8px);}
+  .st.v{opacity:1;transform:translateY(0);transition:all .4s cubic-bezier(.16,1,.3,1);}
+  .st .num{font-size:1em;font-weight:800;}
+  .st .lbl{font-size:.42em;color:#64748B;}
+  .st-div{width:1px;height:28px;background:#1F2937;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="title">🏁 <span>MACH Race 2026 — Arquitectura ADLC Agéntica</span></div>
+  <div class="top-badge">LangGraph · FastAPI · Groq · OpenAI · Gemini · ChromaDB</div>
+</div>
+
+<!-- ═══════════ PIPELINE ═══════════ -->
+<div class="pipeline" id="pipe">
+  <div class="ag" data-d="0">
+    <div class="ag-box" style="background:#1E1B4B;border-color:#7C3AED;">🎯</div>
+    <div class="ag-name">Orquestador</div>
+    <div class="ag-model tp">llama-3.1-8b</div>
+    <div class="ag-out">plan_phases[]</div>
+  </div>
+  <div class="aw" data-d="200"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#7C3AED" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#3B82F6"/></svg></div>
+
+  <div class="ag" data-d="300">
+    <div class="ag-box" style="background:#1E3A5F;border-color:#3B82F6;">📋</div>
+    <div class="ag-name">PRD</div>
+    <div class="ag-model tb">llama-3.3-70b</div>
+    <div class="ag-out">PRDSPECS.md</div>
+    <div class="hitl-dot"></div>
+  </div>
+  <div class="aw" data-d="500"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#3B82F6" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#EC4899"/></svg></div>
+
+  <div class="ag" data-d="600">
+    <div class="ag-box" style="background:#3B1F2B;border-color:#EC4899;">🎨</div>
+    <div class="ag-name">UX</div>
+    <div class="ag-model tk">llama-3.3-70b</div>
+    <div class="ag-out">UXSPECS.md</div>
+    <div class="hitl-dot"></div>
+  </div>
+  <div class="aw" data-d="800"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#EC4899" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#10B981"/></svg></div>
+
+  <div class="ag" data-d="900">
+    <div class="ag-box" style="background:#1A2E1A;border-color:#10B981;">🏛️</div>
+    <div class="ag-name">Architect</div>
+    <div class="ag-model tg">gemini-2.5-flash</div>
+    <div class="ag-out">ARQSPECS + Plan</div>
+    <div class="hitl-dot"></div>
+  </div>
+  <div class="aw" data-d="1100"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#10B981" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#8B5CF6"/></svg></div>
+
+  <div class="ag" data-d="1200">
+    <div class="ag-box" style="background:#2D1B4E;border-color:#8B5CF6;">💻</div>
+    <div class="ag-name">Dev</div>
+    <div class="ag-model tp">gpt-4o-mini</div>
+    <div class="ag-out">Code + PRs</div>
+    <div class="hitl-dot"></div>
+  </div>
+  <div class="aw" data-d="1400"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#8B5CF6" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#06B6D4"/></svg></div>
+
+  <div class="ag" data-d="1500">
+    <div class="ag-box" style="background:#1B2D3A;border-color:#06B6D4;">🧪</div>
+    <div class="ag-name">QA</div>
+    <div class="ag-model tc">llama-3.3-70b</div>
+    <div class="ag-out">QASPECS.md</div>
+    <div class="hitl-dot"></div>
+  </div>
+  <div class="aw" data-d="1700"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#06B6D4" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#F59E0B"/></svg></div>
+
+  <div class="ag" data-d="1800">
+    <div class="ag-box" style="background:#2A2215;border-color:#F59E0B;">☁️</div>
+    <div class="ag-name">Infra</div>
+    <div class="ag-model ta">llama-3.3-70b</div>
+    <div class="ag-out">INFESPEOS.md</div>
+    <div class="hitl-dot"></div>
+  </div>
+  <div class="aw" data-d="2000"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#F59E0B" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#EF4444"/></svg></div>
+
+  <div class="ag" data-d="2100">
+    <div class="ag-box" style="background:#2D1515;border-color:#EF4444;">🔒</div>
+    <div class="ag-name">Security</div>
+    <div class="ag-model tr">llama-3.3-70b</div>
+    <div class="ag-out">DEVSECOPS.md</div>
+    <div class="hitl-dot"></div>
+  </div>
+  <div class="aw" data-d="2300"><svg width="24" height="16"><line class="aw-line" x1="0" y1="8" x2="18" y2="8" stroke="#EF4444" stroke-width="1.5"/><polygon class="aw-head" points="16,4 24,8 16,12" fill="#10B981"/></svg></div>
+
+  <div class="ag" data-d="2400">
+    <div class="ag-box" style="background:#064E3B;border-color:#10B981;">✅</div>
+    <div class="ag-name">DONE</div>
+    <div class="ag-model tg">ciclo completo</div>
+  </div>
+</div>
+
+<!-- ═══════════ 3 COLUMNS ═══════════ -->
+<div class="mid" id="mid">
+
+  <!-- Col 1: Infraestructura -->
+  <div class="card" data-d="2600">
+    <h3><em>⚙️</em> Infraestructura</h3>
+    <div class="item"><i>🧠</i> LangGraph — StateGraph + Checkpoints SQLite</div>
+    <div class="item"><i>🚀</i> FastAPI + Uvicorn — API async</div>
+    <div class="item"><i>🐳</i> Docker Compose — API + Frontend + Volumes</div>
+    <div class="item"><i>🖥️</i> Vue.js 3 + Vite + TailwindCSS — Race Control</div>
+    <div class="item"><i>📱</i> Slack SDK — DMs + Botones + Modales HITL</div>
+    <div class="item"><i>🎫</i> Jira API — Epic + Stories auto por fase</div>
+    <div class="item"><i>🐙</i> GitHub API — Branch + Push + PR automático</div>
+  </div>
+
+  <!-- Col 2: RAG & Knowledge -->
+  <div class="card" data-d="2800">
+    <h3><em>🧠</em> RAG & Knowledge</h3>
+    <div class="item"><i>📚</i> ChromaDB — 1 colección por agente</div>
+    <div class="item"><i>📐</i> Template Matcher — archivos completos como base</div>
+    <div class="item"><i>⚙️</i> Prompts editables — {agent}_prompt.md en vivo</div>
+    <div style="font-size:.48em;color:#475569;margin:6px 0 3px;font-weight:600;">TEMPLATES DEV</div>
+    <div class="item"><i>🎨</i> credit-card.html — Landing tarjeta crédito</div>
+    <div class="item"><i>📱</i> screen-template.md — Kotlin Compose</div>
+    <div class="item"><i>⚛️</i> React patterns, Android guidelines</div>
+    <div style="font-size:.48em;color:#475569;margin:6px 0 3px;font-weight:600;">3 CAPAS DE CONTEXTO</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+      <span class="tag tp">⚙️ Prompt</span>
+      <span class="tag tg">📐 Templates</span>
+      <span class="tag tb">🧠 RAG Chunks</span>
+    </div>
+  </div>
+
+  <!-- Col 3: Dev Self-Healing -->
+  <div class="card" data-d="3000" style="border-color:#2D1B4E;">
+    <h3><em>💻</em> Dev Agent — Self-Healing</h3>
+    <div class="item"><i>1️⃣</i> LLM genera código (gpt-4o-mini / OpenAI)</div>
+    <div class="item"><i>2️⃣</i> Validador: 12 patrones lazy (TODO, stubs...)</div>
+    <div class="item"><i>3️⃣</i> Parser dual: ## FILE: + JSON legacy</div>
+    <div class="item" style="color:#FCD34D;border-color:#451A03;"><i>🔄</i> Self-Healing Loop (máx 3 intentos)</div>
+    <div class="item"><i>🚨</i> Detecta error → feedback al LLM → re-genera</div>
+    <div class="item"><i>🐙</i> Push archivos + abre PR automático</div>
+    <div class="item"><i>⏸</i> HITL: Dev Lead aprueba o rechaza con feedback</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">
+      <span class="tag tp">🔎 Validator</span>
+      <span class="tag ta">🔄 Self-Heal</span>
+      <span class="tag tg">🐙 Auto PR</span>
+      <span class="tag tc">📐 Templates</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ STATS ═══════════ -->
+<div class="bot" id="bot">
+  <div class="st" data-d="3300"><div class="num" style="color:#7C3AED;">8</div><div class="lbl">Agentes</div></div>
+  <div class="st-div"></div>
+  <div class="st" data-d="3400"><div class="num" style="color:#F59E0B;">7</div><div class="lbl">HITL Checkpoints</div></div>
+  <div class="st-div"></div>
+  <div class="st" data-d="3500"><div class="num" style="color:#06B6D4;">3</div><div class="lbl">Proveedores LLM</div></div>
+  <div class="st-div"></div>
+  <div class="st" data-d="3600"><div class="num" style="color:#10B981;">3</div><div class="lbl">Auto-correcciones</div></div>
+  <div class="st-div"></div>
+  <div class="st" data-d="3700"><div class="num" style="color:#EC4899;">12</div><div class="lbl">Patrones validados</div></div>
+  <div class="st-div"></div>
+  <div class="st" data-d="3800"><div class="num" style="color:#3B82F6;">7</div><div class="lbl">Entregables .md</div></div>
+  <div class="st-div"></div>
+  <div class="st" data-d="3900"><div class="num" style="color:#EF4444;">1</div><div class="lbl">RAG por agente</div></div>
+</div>
+
+<script>
+function go(){
+  document.querySelectorAll('.ag').forEach(n=>{setTimeout(()=>n.classList.add('v'),+n.dataset.d||0);});
+  document.querySelectorAll('.aw').forEach(a=>{const d=+a.dataset.d||0;setTimeout(()=>{a.querySelector('.aw-line')?.classList.add('anim');setTimeout(()=>a.querySelector('.aw-head')?.classList.add('anim'),250);},d);});
+  document.querySelectorAll('.card').forEach(c=>{setTimeout(()=>c.classList.add('v'),+c.dataset.d||0);});
+  document.querySelectorAll('.st').forEach(s=>{setTimeout(()=>s.classList.add('v'),+s.dataset.d||0);});
+}
+go();
+</script>
+</body>
+</html>
