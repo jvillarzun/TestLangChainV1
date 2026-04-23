@@ -93,6 +93,39 @@
   .poss-card p { font-size: 0.78em; color: #94A3B8; line-height: 1.5; }
   .poss-tag { display: inline-block; font-size: 0.65em; padding: 2px 8px; border-radius: 4px; background: #1E293B; color: #64748B; margin-top: 10px; }
 
+  /* ── Blueprint ── */
+  .bp { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; background: #0A0E1A; border: 1px solid #1E293B; border-radius: 16px; padding: 32px; position: relative; overflow: hidden; }
+  .bp::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 39px, #111827 39px, #111827 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, #111827 39px, #111827 40px); opacity: 0.3; pointer-events: none; }
+  .bp-title { font-size: 0.65em; color: #475569; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; position: relative; }
+  .bp-row { display: flex; align-items: stretch; position: relative; margin-bottom: 2px; }
+  .bp-node { position: relative; display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 10px; border: 1px solid; min-width: 260px; transition: all 0.2s; }
+  .bp-node:hover { transform: translateX(4px); }
+  .bp-icon { font-size: 1.5em; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px; flex-shrink: 0; }
+  .bp-info { flex: 1; }
+  .bp-name { font-size: 0.85em; font-weight: 700; color: #E2E8F0; }
+  .bp-role { font-size: 0.65em; color: #64748B; margin-top: 1px; }
+  .bp-model { font-size: 0.6em; padding: 2px 8px; border-radius: 4px; background: #1E293B; color: #64748B; display: inline-block; margin-top: 4px; }
+  .bp-output { font-size: 0.6em; color: #475569; margin-top: 2px; }
+  .bp-connector { display: flex; flex-direction: column; align-items: center; width: 60px; position: relative; }
+  .bp-line { width: 2px; flex: 1; min-height: 8px; }
+  .bp-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; flex-shrink: 0; }
+  .bp-hitl { position: absolute; right: -120px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; }
+  .bp-hitl-line { width: 30px; height: 1px; background: #334155; }
+  .bp-hitl-box { font-size: 0.6em; padding: 4px 10px; border-radius: 6px; border: 1px dashed #F59E0B; color: #F59E0B; background: #1C1507; white-space: nowrap; }
+  .bp-rag { position: absolute; left: -130px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; }
+  .bp-rag-box { font-size: 0.6em; padding: 4px 10px; border-radius: 6px; border: 1px solid #312E81; color: #A78BFA; background: #0F0B2A; white-space: nowrap; }
+  .bp-rag-line { width: 30px; height: 1px; background: #312E81; }
+  .bp-wrapper { display: flex; justify-content: center; }
+  .bp-col { display: flex; flex-direction: column; align-items: center; position: relative; padding: 0 140px; }
+  .bp-legend { display: flex; gap: 20px; justify-content: center; margin-top: 24px; flex-wrap: wrap; position: relative; }
+  .bp-legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.65em; color: #64748B; }
+
+  @media (max-width: 768px) {
+    .bp-col { padding: 0 20px; }
+    .bp-hitl, .bp-rag { display: none; }
+    .bp-node { min-width: 200px; }
+  }
+
   /* ── Footer ── */
   .footer { text-align: center; padding: 40px 20px; color: #334155; font-size: 0.75em; }
 
@@ -119,6 +152,7 @@
   <div class="tab" onclick="showTab('specialists')">⚡ Especialistas</div>
   <div class="tab" onclick="showTab('rag')">🧠 RAG & Knowledge</div>
   <div class="tab" onclick="showTab('possibilities')">🚀 Posibilidades</div>
+  <div class="tab" onclick="showTab('blueprint')">📐 Blueprint</div>
 </div>
 </body>
 </html>
@@ -692,6 +726,177 @@
       <p>Nuevo agente que valida cumplimiento regulatorio: PCI-DSS para pagos, GDPR para datos, SOC2 para infraestructura. Específico para fintech.</p>
       <div class="poss-tag">Impacto: Alto · Esfuerzo: Alto</div>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 6: BLUEPRINT -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-blueprint">
+  <div class="bp">
+    <div class="bp-title">MACH-ORCHESTRATOR — ADLC Pipeline v2.0 — Sequential with HITL Checkpoints</div>
+
+    <div class="bp-wrapper">
+      <div class="bp-col">
+
+        <!-- Orchestrator -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#7C3AED;background:#110D2A;">
+            <div class="bp-icon" style="background:#1E1B4B;">🎯</div>
+            <div class="bp-info">
+              <div class="bp-name">orchestrator_init</div>
+              <div class="bp-role">Plan Generation & Phase Routing</div>
+              <div class="bp-model">llama-3.1-8b-instant · Groq</div>
+              <div class="bp-output">→ plan_phases[] · jira_epic_key</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connector -->
+        <div class="bp-connector"><div class="bp-line" style="background:#7C3AED;"></div><div class="bp-dot" style="border-color:#7C3AED;background:#0A0E1A;"></div><div class="bp-line" style="background:#3B82F6;"></div></div>
+
+        <!-- PRD -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#3B82F6;background:#0C1929;">
+            <div class="bp-icon" style="background:#1E3A5F;">📋</div>
+            <div class="bp-info">
+              <div class="bp-name">run_prd</div>
+              <div class="bp-role">Product Requirements Document</div>
+              <div class="bp-model">llama-3.3-70b-versatile · Groq</div>
+              <div class="bp-output">→ PRDSPECS.md · prd_content</div>
+            </div>
+            <div class="bp-hitl"><div class="bp-hitl-line"></div><div class="bp-hitl-box">⏸ hitl_prd → Slack DM → PO</div></div>
+            <div class="bp-rag"><div class="bp-rag-box">📚 RAG: prd templates</div><div class="bp-rag-line"></div></div>
+          </div>
+        </div>
+
+        <div class="bp-connector"><div class="bp-line" style="background:#3B82F6;"></div><div class="bp-dot" style="border-color:#F59E0B;background:#1C1507;"></div><div class="bp-line" style="background:#EC4899;"></div></div>
+
+        <!-- UX -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#EC4899;background:#1A0D16;">
+            <div class="bp-icon" style="background:#3B1F2B;">🎨</div>
+            <div class="bp-info">
+              <div class="bp-name">run_ux</div>
+              <div class="bp-role">UX/UI Design Specifications</div>
+              <div class="bp-model">llama-3.3-70b-versatile · Groq</div>
+              <div class="bp-output">→ UXSPECS.md · ux_content</div>
+            </div>
+            <div class="bp-hitl"><div class="bp-hitl-line"></div><div class="bp-hitl-box">⏸ hitl_ux → Slack DM → UX Lead</div></div>
+            <div class="bp-rag"><div class="bp-rag-box">📚 RAG: design system</div><div class="bp-rag-line"></div></div>
+          </div>
+        </div>
+
+        <div class="bp-connector"><div class="bp-line" style="background:#EC4899;"></div><div class="bp-dot" style="border-color:#F59E0B;background:#1C1507;"></div><div class="bp-line" style="background:#10B981;"></div></div>
+
+        <!-- Architect -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#10B981;background:#0A1A0A;">
+            <div class="bp-icon" style="background:#1A2E1A;">🏛️</div>
+            <div class="bp-info">
+              <div class="bp-name">run_arch</div>
+              <div class="bp-role">Architecture & Engineering Plan</div>
+              <div class="bp-model">gemini-2.5-flash · Google</div>
+              <div class="bp-output">→ ARQSPECS.md · github_plan (JSON)</div>
+            </div>
+            <div class="bp-hitl"><div class="bp-hitl-line"></div><div class="bp-hitl-box">⏸ hitl_arch → Slack DM → Architect</div></div>
+            <div class="bp-rag"><div class="bp-rag-box">📚 RAG: arch patterns + 🐙 GitHub repo</div><div class="bp-rag-line"></div></div>
+          </div>
+        </div>
+
+        <div class="bp-connector"><div class="bp-line" style="background:#10B981;"></div><div class="bp-dot" style="border-color:#F59E0B;background:#1C1507;"></div><div class="bp-line" style="background:#8B5CF6;"></div></div>
+
+        <!-- Dev -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#8B5CF6;background:#130D24;min-width:280px;">
+            <div class="bp-icon" style="background:#2D1B4E;">💻</div>
+            <div class="bp-info">
+              <div class="bp-name">run_dev</div>
+              <div class="bp-role">Code Generation + PR + Self-Healing</div>
+              <div class="bp-model">gpt-4o-mini · OpenAI</div>
+              <div class="bp-output">→ DEVSPECS.md · code files · GitHub PRs</div>
+            </div>
+            <div class="bp-hitl"><div class="bp-hitl-line"></div><div class="bp-hitl-box">⏸ hitl_dev → Slack DM → Dev Lead</div></div>
+            <div class="bp-rag"><div class="bp-rag-box">📚 RAG + 📐 Templates + 🐙 GitHub</div><div class="bp-rag-line"></div></div>
+          </div>
+        </div>
+
+        <div class="bp-connector"><div class="bp-line" style="background:#8B5CF6;"></div><div class="bp-dot" style="border-color:#F59E0B;background:#1C1507;"></div><div class="bp-line" style="background:#06B6D4;"></div></div>
+
+        <!-- QA -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#06B6D4;background:#0A1620;">
+            <div class="bp-icon" style="background:#1B2D3A;">🧪</div>
+            <div class="bp-info">
+              <div class="bp-name">run_qa</div>
+              <div class="bp-role">Quality Assurance & Test Plan</div>
+              <div class="bp-model">llama-3.3-70b-versatile · Groq</div>
+              <div class="bp-output">→ QASPECS.md · qa_passed</div>
+            </div>
+            <div class="bp-hitl"><div class="bp-hitl-line"></div><div class="bp-hitl-box">⏸ hitl_qa → Slack DM → QA Lead</div></div>
+            <div class="bp-rag"><div class="bp-rag-box">📚 RAG: test patterns</div><div class="bp-rag-line"></div></div>
+          </div>
+        </div>
+
+        <div class="bp-connector"><div class="bp-line" style="background:#06B6D4;"></div><div class="bp-dot" style="border-color:#F59E0B;background:#1C1507;"></div><div class="bp-line" style="background:#F59E0B;"></div></div>
+
+        <!-- Infra -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#F59E0B;background:#1A1508;">
+            <div class="bp-icon" style="background:#2A2215;">☁️</div>
+            <div class="bp-info">
+              <div class="bp-name">run_infra</div>
+              <div class="bp-role">Infrastructure & CI/CD Pipeline</div>
+              <div class="bp-model">llama-3.3-70b-versatile · Groq</div>
+              <div class="bp-output">→ INFESPEOS.md</div>
+            </div>
+            <div class="bp-hitl"><div class="bp-hitl-line"></div><div class="bp-hitl-box">⏸ hitl_infra → Slack DM → DevOps</div></div>
+          </div>
+        </div>
+
+        <div class="bp-connector"><div class="bp-line" style="background:#F59E0B;"></div><div class="bp-dot" style="border-color:#F59E0B;background:#1C1507;"></div><div class="bp-line" style="background:#EF4444;"></div></div>
+
+        <!-- Security -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#EF4444;background:#1A0A0A;">
+            <div class="bp-icon" style="background:#2D1515;">🔒</div>
+            <div class="bp-info">
+              <div class="bp-name">run_sec</div>
+              <div class="bp-role">Security Audit — OWASP & DevSecOps</div>
+              <div class="bp-model">llama-3.3-70b-versatile · Groq</div>
+              <div class="bp-output">→ DEVSECOPS.md</div>
+            </div>
+            <div class="bp-hitl"><div class="bp-hitl-line"></div><div class="bp-hitl-box">⏸ hitl_sec → Slack DM → Security</div></div>
+          </div>
+        </div>
+
+        <div class="bp-connector"><div class="bp-line" style="background:#EF4444;"></div><div class="bp-dot" style="border-color:#10B981;background:#052E16;"></div><div class="bp-line" style="background:#10B981;"></div></div>
+
+        <!-- Finalize -->
+        <div class="bp-row">
+          <div class="bp-node" style="border-color:#10B981;background:#051A0A;">
+            <div class="bp-icon" style="background:#064E3B;">✅</div>
+            <div class="bp-info">
+              <div class="bp-name">finalize</div>
+              <div class="bp-role">Cycle Complete — Close Epic & Notify</div>
+              <div class="bp-model">—</div>
+              <div class="bp-output">→ current_phase: "done" · Jira Epic closed</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="bp-legend">
+      <div class="bp-legend-item"><div style="width:8px;height:8px;border-radius:50%;border:2px solid #F59E0B;"></div> HITL Checkpoint (interrupt)</div>
+      <div class="bp-legend-item"><div style="width:8px;height:8px;border-radius:50%;border:2px solid #10B981;background:#052E16;"></div> Phase Complete</div>
+      <div class="bp-legend-item"><div style="width:20px;height:1px;background:#334155;"></div> Approve → next</div>
+      <div class="bp-legend-item"><div style="width:20px;height:1px;background:#EF4444;border-style:dashed;"></div> Reject → retry same</div>
+      <div class="bp-legend-item"><div style="width:8px;height:8px;border-radius:2px;background:#312E81;"></div> RAG / Knowledge injection</div>
+    </div>
+
   </div>
 </div>
 
