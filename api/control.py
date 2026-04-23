@@ -6,6 +6,7 @@ Expone endpoints para el micro-frontend Vue.
 """
 import os
 import threading
+import traceback
 import uuid
 from pathlib import Path
 
@@ -176,7 +177,8 @@ def get_cycle_status(thread_id: str):
         "error_phase": vals.get("error_phase"),
         "error_message": vals.get("error_message"),
         "dev_pr_urls": vals.get("dev_pr_urls", []),
-        "dev_pr_url":  vals.get("dev_pr_url"),
+        "dev_pr_url": vals.get("dev_pr_url"),
+        "preview_url": vals.get("preview_url"),
         "token_usage": vals.get("token_usage", []),
     }
 
@@ -248,5 +250,7 @@ def resume_cycle(body: CycleResume):
         return {"ok": True, "message": "Ciclo reanudado exitosamente"}
     except Exception as e:
         print(f"[Control] Error al reanudar: {e}")
+        print("[Control] Stack trace completo:")
+        traceback.print_exc()  # 🔍 Imprime línea exacta del error
         raise HTTPException(500, f"Error al reanudar el ciclo: {str(e)}")
 

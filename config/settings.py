@@ -15,16 +15,20 @@ load_dotenv()
 # TEST_MODE=true → nodos usan stubs, no llaman al LLM. Ideal para probar HITL/Slack/Jira.
 TEST_MODE: bool = os.environ.get("TEST_MODE", "false").lower() == "true"
 
+# MOCK_EARLY_AGENTS=true → PRD y UX usan archivos estáticos en lugar de LLM
+# Útil para probar solo DEV/QA/etc sin gastar tokens en fases tempranas
+MOCK_EARLY_AGENTS: bool = os.environ.get("MOCK_EARLY_AGENTS", "false").lower() == "true"
+
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
-GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado, no usado actualmente
+GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "") if not TEST_MODE else "test"  # Gemini
 
-# Modelos por agente — todos Groq excepto DEV que usa OpenAI
+# Modelos por agente — Groq, Gemini y OpenAI según necesidad
 MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero
 MODEL_SPECKIT      = "llama-3.3-70b-versatile"
 MODEL_PRD          = "llama-3.3-70b-versatile"
 MODEL_UX           = "llama-3.3-70b-versatile"
-MODEL_ARCHITECT    = "llama-3.3-70b-versatile"
+MODEL_ARCHITECT    = "gemini-2.5-flash"            # arquitectura y engineering plan (Gemini)
 MODEL_DEV          = "gpt-4o-mini"                 # OpenAI — mejor calidad para código
 MODEL_QA           = "llama-3.3-70b-versatile"
 MODEL_INFRA        = "llama-3.3-70b-versatile"

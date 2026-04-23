@@ -5,19 +5,26 @@ from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_ARCHITECT
-from tools.github_tools import get_repo_context
 from config.settings import MODEL_ARCHITECT, REPO_BE_NAME, REPO_FE_NAME
+from tools.github_tools import get_repo_context
 
 def _format_context(ctx: dict) -> str:
     """Serializa el contexto de repo a texto para el prompt."""
     lines = ["=== Árbol de archivos ==="]
     for path in ctx.get("tree", []):
-        lines.append(f"  {path}")
-    lines.append("\n=== Archivos clave ===")
-    for path, content in ctx.get("files", {}).items():
+        lines.append("  " + path)
+    lines.append("\n=== Archivos clave (CONTENIDO COMPLETO PARA LLD) ===")
+    
+    files_dict = ctx.get("files", {})
+    if not files_dict:
+        lines.append("\n⚠️ ADVERTENCIA: No se pudo obtener el contenido de los archivos.")
+        
+    for path, content in files_dict.items():
         lines.append(f"\n--- {path} ---")
-        lines.append(content[:3000])  # cap para no exceder ventana de contexto
+        # Subimos el límite a 12000 para asegurar que vea el final de los componentes React
+        # Los modelos modernos aguantan este contexto sin problema.
+        lines.append(content[:12000]) 
+        
     return "\n".join(lines)
 
 
@@ -40,13 +47,11 @@ def run_arch_node(state: CycleState) -> dict:
     if feedback:
         print(f"   💬 Re-ejecutando con feedback: {feedback}")
 
-    # ── Obtener contexto de repos ────────────────────────────────────────────
-    print("   🔍 Obteniendo contexto de repositorios GitHub...")
-    be_ctx = get_repo_context(REPO_BE_NAME)
+    # ── Obtener contexto de repos (FRONTEND-ONLY) ────────────────────────────
+    print("   🔍 Obteniendo contexto del repositorio Frontend...")
     fe_ctx = get_repo_context(REPO_FE_NAME)
-    be_context = _format_context(be_ctx)
     fe_context = _format_context(fe_ctx)
-    print(f"   ✔ BE: {len(be_ctx['tree'])} archivos | FE: {len(fe_ctx['tree'])} archivos")
+    print(f"   ✔ FE: {len(fe_ctx['tree'])} archivos (Frontend-Only Architecture)")
 
     try:
         from rag.rag_helper import get_rag_context
@@ -62,9 +67,7 @@ def run_arch_node(state: CycleState) -> dict:
         challenge_description=state["challenge_description"],
         prd_content=state.get("prd_content") or "",
         feedback=feedback or "Sin feedback previo.",
-        be_context=be_context,
         fe_context=fe_context,
-        repo_be_name=REPO_BE_NAME,
         repo_fe_name=REPO_FE_NAME,
         orchestrator_instructions=get_phase_instructions(state, "arch") or "Sin instrucciones adicionales.",
     )

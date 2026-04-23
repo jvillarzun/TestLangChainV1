@@ -56,15 +56,39 @@ def load_prompt(agent: str, **kwargs) -> str:
     class _Safe(dict):
         def __missing__(self, key: str) -> str:
             return "{" + key + "}"
-    return template.format_map(_Safe(kwargs))
+    try:
+        return template.format_map(_Safe(kwargs))
+    except (KeyError, ValueError) as e:
+        # Si falla el format, puede ser que kwargs contenga código con llaves no escapadas
+        print(f"⚠️  [load_prompt] Error formateando prompt de '{agent}': {e}")
+        print(f"   Hint: Verifica que el contenido de kwargs no tenga {{}} sin escapar")
+        print(f"   Keys: {list(kwargs.keys())}")
+        raise
 
 
 def create_llm(model: str) -> Any:
-    """Crea instancia LLM. Soporta Groq y OpenAI según el modelo."""
+    """
+    Crea instancia LLM. Soporta Groq, OpenAI y Google Gemini según el modelo.
+    Único lugar para cambiar proveedor.
+    """
+    # OpenAI models
     if model in _OPENAI_MODELS:
         from langchain_openai import ChatOpenAI
         from config.settings import OPENAI_API_KEY
         return ChatOpenAI(model=model, api_key=OPENAI_API_KEY)
+
+    # Google Gemini models
+    if "gemini" in model:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from config.settings import GOOGLE_API_KEY
+        return ChatGoogleGenerativeAI(
+            model=model,
+            google_api_key=GOOGLE_API_KEY,
+            temperature=0.2,
+            convert_system_message_to_human=True,
+        )
+
+    # Default: Groq
     from langchain_groq import ChatGroq
     from config.settings import GROQ_API_KEY
     return ChatGroq(model=model, api_key=GROQ_API_KEY)

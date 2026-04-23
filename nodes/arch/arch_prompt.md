@@ -22,14 +22,12 @@ Usas el modelo C4 y priorizas decisiones explícitas con ADRs.
 
 {feedback}
 
-## Contexto de Repositorios Actuales
+## Contexto del Repositorio Frontend
+
+🚨 **ARQUITECTURA FRONTEND-ONLY**: No existe backend en este proyecto. Cualquier dato o API necesaria debe ser mockeada en el frontend.
 
 Analiza el código existente antes de proponer cambios.
-No propongas cambios que ignoren la estructura actual de los proyectos.
-
-### Backend — `{repo_be_name}`
-
-{be_context}
+No propongas cambios que ignoren la estructura actual del proyecto.
 
 ### Frontend — `{repo_fe_name}`
 
@@ -81,32 +79,67 @@ Al menos 3 decisiones importantes. Formato:
 ### 8. Stack tecnológico
 Tabla: Componente | Tecnología | Versión | Justificación
 
-### 9. Engineering Plan
+### 9. Diseño de Bajo Nivel (LLD - Low Level Design)
+Esta sección es CRÍTICA para que el Agente Dev no cometa errores. Por cada componente o archivo a modificar/crear, DEBES detallar la estructura del código:
+
+**Para el Frontend (React/Next.js):**
+- **Estado (State):** Qué variables de estado exactas se necesitan (ej. `const [count, setCount] = useState(0)`).
+- **Efectos (Hooks):** Qué dependencias y lógica exacta va en los `useEffect` o manejadores de eventos (ej. `handleSimulateClick`).
+- **Props e Interfaces:** Si se crea un componente nuevo, define la interfaz TypeScript exacta (ej. `interface CardProps {{ title: string, amount: number }}`).
+- **Estilos:** Especifica las clases CSS exactas basadas en el diseño existente (ej. `className="bg-mach-purple text-white rounded-lg p-4"`).
+
+🚨 **Mock-Driven Development (Frontend-Only Architecture):**
+Si el PRD requiere datos de una API o backend:
+- DEBES diseñar funciones mock en el frontend (ej. crear `src/services/mockApi.ts`)
+- Usa `Promise` con `setTimeout` para simular latencia realista (100-300ms)
+- Retorna datos de prueba estáticos pero realistas
+- La UI debe ser 100% funcional sin un backend real
+- Ejemplo: `const mockCheckFraud = async (amount: number) => {{ return new Promise(resolve => setTimeout(() => resolve({{ isFraud: amount > 10000 }}), 200)); }}`
+
+### 10. Engineering Plan
 Al final del documento DEBES incluir un bloque JSON con el plan de implementación
 concreto sobre los repositorios reales. Usa exactamente este formato:
 
 ```json
-{{
-  "steps": [
-    {{
-      "repo": "backend",
-      "file": "src/routes/example.js",
+{{frontend",
+      "file": "src/app/example/page.tsx",
       "action": "CREATE",
       "description": "Explicación técnica de qué hace este archivo y por qué"
     }},
     {{
       "repo": "frontend",
-      "file": "src/app/example/page.tsx",
+      "file": "src/services/mockApi.ts",
+      "action": "CREATE",
+      "description": "Mock API service que simula llamadas al backend con Promises y datos estáticos"
+    }},
+    {{
+      "repo": "frontend",
+      "file": "src/components/Counter.tsx",
       "action": "MODIFY",
-      "description": "Explicación técnica del cambio necesario"
+      "description": "Explicación técnica del cambio necesario. Integrar al final del componente, conservando imports y lógica existente."
     }}
   ]
 }}
 ```
 
+🚨 **FRONTEND-ONLY ARCHITECTURE - REGLA CRÍTICA:**
+- Valor ÚNICO válido para `repo`: **`"frontend"`** (o el nombre completo del repo frontend)
+- **ESTÁ ESTRICTAMENTE PROHIBIDO** usar `"backend"` o `"be"` como valor de repo
+- Valores válidos para `action`: `"CREATE"` o `"MODIFY"`
+- Cada step debe referenciar rutas reales del árbol de archivos del frontend provisto arriba
+- Si necesitas datos de API, DEBES crear archivos mock en el frontend (ej. `src/services/mockApi.ts`)
 Valores válidos para `repo`: `"backend"` o `"frontend"`.
 Valores válidos para `action`: `"CREATE"` o `"MODIFY"`.
 Cada step debe referenciar rutas reales del árbol de archivos provisto arriba.
+
+🚨 **REGLA CRÍTICA BROWNFIELD:**
+Cuando la acción es `MODIFY` sobre un archivo existente, DEBES especificar en la `description`:
+- Que el Agente Dev debe **conservar y respetar** todos los imports, componentes y lógica actual
+- La ubicación exacta donde inyectar el código nuevo (ej: "al final del componente", "antes del return", "dentro de la función handleSubmit", "después de los imports existentes")
+- Qué partes del código original NO deben tocarse (ej: "mantener el estado actual", "preservar los handlers existentes")
+
+Ejemplo de descripción correcta para MODIFY:
+"Agregar validación de email en el formulario. Insertar la función validateEmail() después de los imports y antes de la definición del componente. Mantener intactos los campos actuales del formulario y agregar el campo email después del campo 'name'. Preservar todos los handlers existentes."
 
 ## Reglas de output
 

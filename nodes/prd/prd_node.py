@@ -1,13 +1,32 @@
+from pathlib import Path
 from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_PRD
+from config.settings import MODEL_PRD, MOCK_EARLY_AGENTS
 
 
 def run_prd_node(state: CycleState) -> dict:
     """Nodo PRD — Gemini genera PRDSPECS.md desde el challenge."""
     print("\n📋 PRD-AGENT: Generando PRDSPECS.md...")
+
+    # ── Mock para pruebas rápidas sin gastar tokens ───────────────────────────
+    if MOCK_EARLY_AGENTS:
+        print("⚡ [PRD] Usando mock estático. Saltando LLM.")
+        mock_path = Path(__file__).parent.parent.parent / "mocks" / "mock_prdspecs.md"
+        if mock_path.exists():
+            prd_content = mock_path.read_text(encoding="utf-8")
+            output_path = save_output("PRDSPECS.md", prd_content)
+            print(f"   💾 Mock guardado en {output_path}")
+            print(f"   ✅ PRDSPECS.md mock ({len(prd_content)} chars)")
+            return {
+                "prd_content":     prd_content,
+                "error_phase":     None,
+                "error_message":   None,
+                "jira_story_keys": [],
+            }
+        else:
+            print(f"   ⚠️  Mock no encontrado en {mock_path}. Ejecutando LLM normal.")
 
     feedback = _get_last_feedback(state, "prd")
     if feedback:
