@@ -83,6 +83,9 @@ class CycleState(TypedDict):
     confluence_prd_url: Optional[str]
     """URL de la página Confluence con el PRD Rationale."""
 
+    confluence_arch_url: Optional[str]
+    """URL de la página Confluence con el Architecture TDD."""
+
     ux_content: Optional[str]
     """Contenido completo del UXSPECS.md generado."""
 
@@ -217,6 +220,7 @@ def initial_state(
         # Deliverables — vacíos hasta que cada agente corra
         prd_content=None,
         confluence_prd_url=None,
+        confluence_arch_url=None,
         ux_content=None,
         arch_content=None,
         dev_content=None,
