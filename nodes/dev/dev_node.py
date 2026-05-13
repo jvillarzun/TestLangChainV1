@@ -147,46 +147,6 @@ def _get_modify_files_context(github_plan: str, repo_name: str) -> str:
 
 def _parse_generated_files(content: str) -> list[dict]:
     """
-    Extrae archivos del output del LLM. Intenta dos formatos en orden:
-      1. Delimitadores <<<FILE: path>>> ... <<<ENDFILE>>> (preferido — sin JSON escaping)
-      2. Bloque JSON {"files": [...]} (fallback — por si el LLM usa el formato antiguo)
-    """
-    print(f"\n🔍 [DEV Parser] Buscando archivos en respuesta LLM ({len(content)} chars)...")
-
-    # ── Formato 1: delimitadores ───────────────────────────────────────────────
-    matches = re.findall(r"<<<FILE:\s*(.+?)>>>(.*?)<<<ENDFILE>>>", content, re.DOTALL)
-    if matches:
-        files = []
-        for path, file_content in matches:
-            path = path.strip()
-            file_content = file_content.strip()
-            files.append({"repo": "frontend", "path": path, "content": file_content})
-            print(f"   ✔ [delimitador] {path} ({len(file_content)} chars)")
-        print(f"✅ [DEV Parser] {len(files)} archivo(s) extraídos via <<<FILE>>>")
-        return files
-
-    # ── Formato 2: JSON fallback ───────────────────────────────────────────────
-    print(f"⚠️  [DEV Parser] No se encontraron <<<FILE>>> — intentando fallback JSON...")
-    match = re.search(r"```json\s*(\{.*?\"files\".*?\})\s*```", content, re.DOTALL)
-    if not match:
-        print(f"❌ [DEV Parser] Ningún formato reconocido — no se generarán PRs")
-        return []
-
-    try:
-        data = json.loads(match.group(1))
-        all_files = data.get("files", [])
-        files = [f for f in all_files if f.get("repo", "frontend") != "backend"]
-        skipped = len(all_files) - len(files)
-        print(f"✅ [DEV Parser] JSON fallback: {len(files)} archivo(s) | ignorados backend: {skipped}")
-        for f in files:
-            print(f"   ✔ [json] {f.get('path', '?')} ({len(f.get('content', ''))} chars)")
-        return files
-    except json.JSONDecodeError as e:
-        print(f"❌ [DEV Parser] JSON inválido: {e}")
-        return []
-
-def _parse_generated_files(content: str) -> list[dict]:
-    """
     Extrae archivos usando el NUEVO FORMATO de bloques Markdown.
     Busca patrones: ## FILE: {path} seguido de ```{lang} ... ```
     Frontend-Only: todos los archivos se asumen del repo frontend.
@@ -555,9 +515,8 @@ def run_dev_node(state: CycleState) -> dict:
     # ── Auto-sanación con validación de build ─────────────────────────────────
     dev_content, generated_files = _self_healing_loop(state, dev_content, system_prompt)
     
-    # Actualizar archivo con versión final
-    if dev_content != save_output("DEVSPECS.md", dev_content):
-        save_output("DEVSPECS.md", dev_content)
+    # Actualizar archivo con versión final (post self-healing)
+    save_output("DEVSPECS.md", dev_content)
 
     # ── Extraer archivos generados y subir PRs ────────────────────────────────
     branch = f"feat/adlc-{state['thread_id'][:8]}"

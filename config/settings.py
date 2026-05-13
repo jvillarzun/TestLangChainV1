@@ -20,7 +20,6 @@ TEST_MODE: bool = os.environ.get("TEST_MODE", "false").lower() == "true"
 # Permite cambiar entre "gemini" y "openai" sin tocar código
 LLM_PROVIDER_ARCH  = os.environ.get("LLM_PROVIDER_ARCH", "gemini")     # "gemini" o "openai"
 LLM_MODEL_ARCH     = os.environ.get("LLM_MODEL_ARCH", "gemini-2.5-flash")  # o "gpt-4o-mini", "gpt-4o"
-
 LLM_PROVIDER_DEV   = os.environ.get("LLM_PROVIDER_DEV", "gemini")      # "gemini" o "openai"
 LLM_MODEL_DEV      = os.environ.get("LLM_MODEL_DEV", "gemini-2.5-flash")   # o "gpt-4o-mini", "gpt-4o"
 
