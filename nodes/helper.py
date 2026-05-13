@@ -5,16 +5,30 @@ from state.cycle_state import CycleState
 
 _OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
 
-# Groq pricing $/1M tokens (input, output)
+# Pricing $/1M tokens (input, output)
 _GROQ_PRICING: dict[str, dict[str, float]] = {
     "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
     "llama-3.1-8b-instant":    {"input": 0.05, "output": 0.08},
 }
-_PRICING_DEFAULT = {"input": 0.59, "output": 0.79}
+_OPENAI_PRICING: dict[str, dict[str, float]] = {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o":      {"input": 2.50, "output": 10.00},
+}
+_GROQ_PRICING_DEFAULT = {"input": 0.59, "output": 0.79}
+_OPENAI_PRICING_DEFAULT = {"input": 0.15, "output": 0.60}
+
+
+def _detect_provider(model: str) -> str:
+    if model.startswith(("gpt-", "o1", "o3", "o4")):
+        return "openai"
+    return "groq"
 
 
 def _calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    p = _GROQ_PRICING.get(model, _PRICING_DEFAULT)
+    if _detect_provider(model) == "openai":
+        p = _OPENAI_PRICING.get(model, _OPENAI_PRICING_DEFAULT)
+    else:
+        p = _GROQ_PRICING.get(model, _GROQ_PRICING_DEFAULT)
     return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
 
 
@@ -50,11 +64,21 @@ def load_prompt(agent: str, **kwargs) -> str:
 
 
 def create_llm(model: str) -> Any:
-    """Crea instancia LLM. Único lugar para cambiar proveedor (actualmente Groq).
-    GROQ_MAX_TOKENS env var limita tokens por respuesta — útil para pruebas baratas."""
+    """Crea instancia LLM según el modelo solicitado.
+    GROQ_MAX_TOKENS y OPENAI_MAX_TOKENS limitan tokens por respuesta."""
     import os
+    from config.settings import GROQ_API_KEY, OPEN_AI_KEY
+
+    provider = _detect_provider(model)
+
+    if provider == "openai":
+        from langchain_openai import ChatOpenAI
+
+        api_key = os.environ.get("OPENAI_API_KEY") or OPEN_AI_KEY
+        max_tokens = int(os.environ.get("OPENAI_MAX_TOKENS", 4096))
+        return ChatOpenAI(model=model, api_key=api_key, max_tokens=max_tokens)
+
     from langchain_groq import ChatGroq
-    from config.settings import GROQ_API_KEY
     max_tokens = int(os.environ.get("GROQ_MAX_TOKENS", 4096))
     return ChatGroq(model=model, api_key=GROQ_API_KEY, max_tokens=max_tokens)
 

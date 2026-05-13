@@ -48,15 +48,58 @@ except Exception as e:
     print(f"⚠️  [GitHub Init] El ciclo ADLC continuará pero sin crear PRs en la fase DEV")
     _gh = Github(GITHUB_TOKEN) if GITHUB_TOKEN else None  # Cliente sin validar
 
-# Archivos clave que se incluyen en el contexto por defecto
-_KEY_FILES = [
-    "package.json",
-    "src/app.js",
-    "src/server.js",
-    "src/app/page.tsx",
-    "src/app/layout.tsx",
-    "src/lib/api.ts",
+_COMPONENT_DIRS = {"components", "component", "ui", "atoms", "molecules", "organisms", "widgets", "screens", "views", "layouts"}
+_LIB_DIRS       = {"lib", "utils", "helpers", "services", "store", "context", "hooks", "api"}
+_CODE_EXTS      = {".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".py"}
+
+_ROOT_CONFIGS = [
+    "package.json", "pyproject.toml", "tsconfig.json",
+    "next.config.js", "next.config.mjs", "next.config.ts",
+    "vite.config.ts", "vite.config.js", "tailwind.config.ts", "tailwind.config.js",
 ]
+_ENTRY_POINTS = [
+    "src/app/page.tsx", "app/page.tsx",
+    "src/app/layout.tsx", "app/layout.tsx",
+    "src/pages/index.tsx", "pages/index.tsx",
+    "src/main.tsx", "src/App.tsx",
+    "src/lib/api.ts", "src/utils/api.ts",
+]
+
+
+def _detect_key_files(tree: list[str]) -> list[str]:
+    """
+    Detecta archivos relevantes del repo a partir del árbol ya obtenido.
+    Prioriza: configs raíz → entry points → componentes UI → lib/utils.
+    Cap de 35 archivos para no exceder ventana de contexto.
+    """
+    tree_set = set(tree)
+    selected: list[str] = []
+
+    for name in _ROOT_CONFIGS:
+        if name in tree_set:
+            selected.append(name)
+
+    for path in _ENTRY_POINTS:
+        if path in tree_set and path not in selected:
+            selected.append(path)
+
+    component_files = [
+        f for f in tree
+        if any(seg in _COMPONENT_DIRS for seg in f.split("/"))
+        and any(f.endswith(ext) for ext in _CODE_EXTS)
+        and f not in selected
+    ]
+    selected.extend(component_files[:20])
+
+    lib_files = [
+        f for f in tree
+        if any(seg in _LIB_DIRS for seg in f.split("/"))
+        and any(f.endswith(ext) for ext in _CODE_EXTS)
+        and f not in selected
+    ]
+    selected.extend(lib_files[:10])
+
+    return selected[:35]
 
 
 def _get_repo(repo_name: str) -> Repository:
@@ -122,15 +165,18 @@ def get_repo_context(repo_name: str) -> dict[str, Any]:
             if item.type == "blob"
         ]
 
-        # Contenido de archivos clave
+        # Detectar archivos clave dinámicamente según estructura real del repo
+        key_paths = _detect_key_files(file_tree)
+        print(f"[GitHub] Archivos clave detectados: {len(key_paths)}")
+
         key_contents: dict[str, str] = {}
-        for path in _KEY_FILES:
+        for path in key_paths:
             try:
                 content_file = repo.get_contents(path, ref=default_branch)
                 if not isinstance(content_file, list):
                     key_contents[path] = content_file.decoded_content.decode("utf-8")
             except UnknownObjectException:
-                pass  # archivo no existe en este repo — omitir
+                pass
             except Exception as exc:
                 print(f"[GitHub] No se pudo leer {path}: {exc}")
 
@@ -307,63 +353,71 @@ def open_pull_request(
 
 def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, Any]:
     """
-    Obtiene el estado de CI/CD de un Pull Request.
-
-    Args:
-        repo_name: Nombre del repositorio (ej: 'mach-frontend-test-hackathon')
-        pr_url: URL del PR (ej: 'https://github.com/user/repo/pull/42')
+    Consulta el estado del CI (GitHub Actions check runs) para un PR.
 
     Returns:
-        dict con keys: 'state', 'summary', 'checks'
-        - state: 'success' | 'failure' | 'pending' | 'unknown'
-        - summary: texto resumen del CI
-        - checks: lista de {name, status, conclusion}
+        {
+            "status":      "success" | "failure" | "pending" | "no_ci" | "error",
+            "summary":     texto listo para inyectar en el prompt QA,
+            "details_url": url del PR,
+            "checks":      lista de {name, status, conclusion} para cada check run,
+        }
     """
+    import re as _re
+
+    m = _re.search(r"/pull/(\d+)", pr_url)
+    if not m:
+        return {"status": "error", "summary": "URL de PR inválida — no se pudo obtener CI status", "details_url": pr_url, "checks": []}
+
+    pr_number = int(m.group(1))
+    print(f"   🔍 [GitHub CI] Consultando CI para PR #{pr_number} en {repo_name}...")
+
     try:
         repo = _get_repo(repo_name)
+        pr   = repo.get_pull(pr_number)
+        head_sha = pr.head.sha
+        print(f"   🔍 [GitHub CI] Head SHA: {head_sha[:8]}...")
 
-        # Extraer número del PR desde la URL
-        pr_number = int(pr_url.rstrip("/").split("/")[-1])
-        pr = repo.get_pull(pr_number)
+        # Preferir check runs (GitHub Actions)
+        try:
+            commit     = repo.get_commit(head_sha)
+            check_runs = list(commit.get_check_runs())
+        except Exception as e:
+            print(f"   ⚠️  [GitHub CI] check_runs no disponible: {e} — usando combined status")
+            check_runs = []
 
-        # Obtener checks del último commit
-        last_commit = pr.get_commits().reversed[0]
-        check_runs = last_commit.get_check_runs()
+        checks = [{"name": r.name, "status": r.status, "conclusion": r.conclusion} for r in check_runs]
 
-        checks = []
-        for run in check_runs:
-            checks.append({
-                "name": run.name,
-                "status": run.status,
-                "conclusion": run.conclusion,
-            })
+        if check_runs:
+            pending     = [r for r in check_runs if r.status != "completed"]
+            conclusions = [r.conclusion for r in check_runs if r.status == "completed"]
 
-        if not checks:
-            return {
-                "state": "unknown",
-                "summary": f"PR #{pr_number}: sin checks de CI configurados.",
-                "checks": [],
-            }
+            if pending:
+                overall = "pending"
+            elif any(c in ("failure", "timed_out", "cancelled", "action_required") for c in conclusions):
+                overall = "failure"
+            elif all(c in ("success", "neutral", "skipped") for c in conclusions if c):
+                overall = "success"
+            else:
+                overall = "pending"
 
-        all_conclusions = [c["conclusion"] for c in checks if c["conclusion"]]
-        if all(c == "success" for c in all_conclusions):
-            state = "success"
-        elif any(c == "failure" for c in all_conclusions):
-            state = "failure"
-        elif any(c["status"] != "completed" for c in checks):
-            state = "pending"
+            icon_map = {"success": "✅", "failure": "❌", "timed_out": "⏱️", "cancelled": "🚫", "neutral": "⚪", "skipped": "⏭️"}
+            lines = [f"CI: **{overall.upper()}** — {len(check_runs)} check(s) | PR: {pr_url}"]
+            for r in check_runs:
+                icon = icon_map.get(r.conclusion or "", "⏳")
+                lines.append(f"  {icon} `{r.name}`: {r.conclusion or r.status}")
+
         else:
-            state = "unknown"
+            # Fallback: commit combined status (legacy branch protection / webhooks)
+            commit   = repo.get_commit(head_sha)
+            combined = commit.get_combined_status()
+            state_map = {"success": "success", "failure": "failure", "error": "failure", "pending": "pending"}
+            overall   = state_map.get(combined.state, "no_ci") if combined.total_count > 0 else "no_ci"
+            lines     = [f"CI: **{overall.upper()}** ({combined.total_count} status checks) | PR: {pr_url}"]
 
-        passed = sum(1 for c in all_conclusions if c == "success")
-        total = len(checks)
-        summary = f"PR #{pr_number}: CI {state} ({passed}/{total} checks passed)"
+        print(f"   {'✅' if overall == 'success' else '❌' if overall == 'failure' else '⏳'} [GitHub CI] Status: {overall}")
+        return {"status": overall, "summary": "\n".join(lines), "details_url": pr_url, "checks": checks}
 
-        return {"state": state, "summary": summary, "checks": checks}
-
-    except Exception as e:
-        return {
-            "state": "unknown",
-            "summary": f"No se pudo obtener CI status: {e}",
-            "checks": [],
-        }
+    except Exception as exc:
+        print(f"   ❌ [GitHub CI] Error: {exc}")
+        return {"status": "error", "summary": f"No se pudo obtener CI status: {exc}", "details_url": pr_url, "checks": []}

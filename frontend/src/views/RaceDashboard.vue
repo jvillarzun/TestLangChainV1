@@ -181,10 +181,13 @@
             <div class="text-amber-400 font-bold text-lg mt-0.5">{{ roiData.durationMin }} min</div>
           </div>
           <div class="bg-slate-800 rounded px-3 py-2 text-center">
-            <div class="text-xs text-slate-500 uppercase tracking-wider">Ahorro estimado</div>
-            <div class="text-purple-400 font-bold text-lg mt-0.5">~$6,000</div>
-            <div class="text-xs text-slate-600">vs 40h × 7 esp.</div>
+            <div class="text-xs text-slate-500 uppercase tracking-wider">Ratio ahorro</div>
+            <div class="text-purple-400 font-bold text-lg mt-0.5">{{ roiData.savingsRatio }}</div>
+            <div class="text-xs text-slate-600">humano {{ roiData.humanCostLabel }}</div>
           </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mb-4">
+          Costo humano estimado: {{ roiData.humanCostLabel }} vs costo IA ${{ roiData.totalCost.toFixed(4) }}
         </div>
         <table v-if="roiData.perAgent.length" class="w-full text-xs">
           <thead>
@@ -302,14 +305,19 @@ const phaseColor = computed(() =>
 
 const roiData = computed(() => {
   const usage = store.status?.token_usage || []
+  const humanCost = 6000
   const totalTokens = usage.reduce((s, u) => s + (u.total_tokens || 0), 0)
   const totalCost   = usage.reduce((s, u) => s + (u.cost_usd || 0), 0)
   const totalSecs   = usage.reduce((s, u) => s + (u.duration_s || 0), 0)
 
   const cycleStart = store.status?.cycle_start_time
-  let durationMin = cycleStart
-    ? Math.round((Date.now() - new Date(cycleStart).getTime()) / 60000)
-    : Math.round(totalSecs / 60)
+  const cycleEnd = store.status?.cycle_end_time
+  const startedAt = cycleStart ? new Date(cycleStart).getTime() : NaN
+  const endedAt = cycleEnd ? new Date(cycleEnd).getTime() : Date.now()
+  const hasValidTimestamps = Number.isFinite(startedAt) && Number.isFinite(endedAt) && endedAt >= startedAt
+  const durationMin = hasValidTimestamps
+    ? Math.max(0, Math.round((endedAt - startedAt) / 60000))
+    : Math.max(0, Math.round(totalSecs / 60))
 
   // Agrupa por agente sumando todos sus runs (re-runs por HITL)
   const agentMap = {}
@@ -326,7 +334,18 @@ const roiData = computed(() => {
     duration_s: Math.round(r.duration_s * 10) / 10,
   }))
 
-  return { totalTokens, totalCost, durationMin, perAgent }
+  const savingsRatio = totalCost > 0
+    ? `${Math.round(humanCost / totalCost).toLocaleString()}x`
+    : '∞'
+
+  return {
+    totalTokens,
+    totalCost,
+    durationMin,
+    perAgent,
+    savingsRatio,
+    humanCostLabel: `~$${humanCost.toLocaleString()}`,
+  }
 })
 
 // Pull Requests URLs del agente DEV
