@@ -34,15 +34,15 @@ El proyecto genera **únicamente aplicaciones frontend** (Next.js, React, Vue.js
 
 | Fase | Agente | Entregable | LLM por Defecto |
 |------|--------|------------|-----------------|
-| **PRD** | Product Manager | `PRDSPECS.md` - Requirements Document | Gemini 2.5 Flash |
-| **UX** | UX Designer | `UXSPECS.md` - Wireframes y User Flows | Gemini 2.5 Flash |
-| **ARQ** | Arquitecto | `ARQSPECS.md` - C4 Diagrams + Engineering Plan | **OpenAI GPT-4o-mini** |
-| **DEV** | Developer | `DEVSPECS.md` + Código + Pull Request | **OpenAI GPT-4o-mini** |
-| **QA** | QA Engineer | `QASPECS.md` - Test Plan | Gemini 2.5 Flash |
-| **INFRA** | DevOps | `INFRASPECS.md` - Deployment Plan | Gemini 2.5 Flash |
-| **SEC** | Security Engineer | `SECSPECS.md` - Security Audit | Gemini 2.5 Flash |
+| **PRD** | Product Manager | `PRDSPECS.md` + Rationale en Confluence | `gpt-4o-mini` (OpenAI) |
+| **UX** | UX Designer | `UXSPECS.md` - Wireframes y User Flows | `gpt-4o-mini` (OpenAI) |
+| **ARQ** | Arquitecto | `ARQSPECS.md` + TDD en Confluence + Engineering Plan JSON | `gemini-2.5-flash` (Gemini, configurable) |
+| **DEV** | Developer | `DEVSPECS.md` + Código + Pull Request en GitHub | `gemini-2.5-flash` (Gemini, configurable) |
+| **QA** | QA Engineer | `QASCPECS.md` - Test Plan + CI status real | `gpt-4o-mini` (OpenAI) |
+| **INFRA** | DevOps | `INFRASPECS.md` - Deployment Plan | `gpt-4o-mini` (OpenAI) |
+| **SEC** | Security Engineer | `SECSPECS.md` - Security Audit | `gpt-4o-mini` (OpenAI) |
 
-**Multi-Provider Support**: Los agentes **ARQ** y **DEV** pueden usar **Gemini** u **OpenAI** intercambiablemente vía variables de entorno.
+**Multi-Provider Support**: Todos los agentes usan **OpenAI GPT-4o-mini** por defecto. Los agentes **ARQ** y **DEV** tienen provider configurable vía `LLM_PROVIDER_ARCH`/`LLM_PROVIDER_DEV` (`"gemini"` o `"openai"`).
 
 ---
 
@@ -127,8 +127,9 @@ Cada fase tiene **2 nodos separados**:
 - **Chart.js**: Visualización de métricas
 
 ### LLMs Soportados
-- **Google Gemini 2.5 Flash** (default): 15 RPM free tier, 32K context
-- **OpenAI GPT-4o/GPT-4o-mini**: Multi-provider para ARQ y DEV
+- **OpenAI GPT-4o-mini** (default global): todos los agentes salvo ARQ/DEV configurables
+- **Google Gemini 2.5 Flash**: default para ARQ y DEV (`LLM_PROVIDER_ARCH/DEV=gemini`)
+- **Groq Llama 3**: disponible como fallback (`LLM_PROVIDER_*=groq`)
 
 ### Infraestructura
 - **Docker + Podman Compose**: Contenedores multi-servicio
@@ -167,7 +168,8 @@ MACH-ORCHESTRATOR/
 ├── tools/
 │   ├── slack_tools.py               # notify_team(), notify_reviewer(), update_hitl_msg()
 │   ├── jira_tools.py                # create_epic/story/task(), update_issue_status()
-│   └── github_tools.py              # get_repo_context(), create_pull_request()
+│   ├── github_tools.py              # get_repo_context(), get_files_content(), create_branch_and_push(), open_pull_request(), get_pr_ci_status()
+│   └── confluence_tools.py          # create_prd_rationale(), create_arch_tdd()
 ├── api/
 │   └── slack_webhook.py             # FastAPI: POST /slack/interactive, /deliverables/
 ├── dashboard/
@@ -239,14 +241,15 @@ cp .env.example .env
 
 ```env
 # ── LLMs ──────────────────────────────────────────────
-GOOGLE_API_KEY=AIza...              # https://aistudio.google.com/app/apikey
-OPENAI_API_KEY=sk-proj-...          # https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-proj-...          # https://platform.openai.com/api-keys (default global)
+GOOGLE_API_KEY=AIza...              # https://aistudio.google.com/app/apikey (Gemini)
+GROQ_API_KEY=gsk_...                # https://console.groq.com (opcional, fallback)
 
 # ── Multi-Provider (Arch & Dev) ───────────────────────
-LLM_PROVIDER_ARCH=openai            # "gemini" o "openai"
-LLM_MODEL_ARCH=gpt-4o-mini          # o "gemini-2.5-flash"
-LLM_PROVIDER_DEV=openai
-LLM_MODEL_DEV=gpt-4o-mini
+LLM_PROVIDER_ARCH=gemini            # "gemini" o "openai" (default: gemini)
+LLM_MODEL_ARCH=gemini-2.5-flash     # o "gpt-4o-mini"
+LLM_PROVIDER_DEV=gemini             # "gemini" o "openai" (default: gemini)
+LLM_MODEL_DEV=gemini-2.5-flash      # o "gpt-4o-mini"
 
 # ── Slack ─────────────────────────────────────────────
 SLACK_BOT_TOKEN=xoxb-...
@@ -268,6 +271,12 @@ JIRA_PROJECT_KEY=MACH
 GITHUB_TOKEN=ghp_...                # Personal Access Token con repo scope
 GITHUB_USERNAME=your-username
 REPO_FE_NAME=mach-frontend-test-hackathon
+
+# ── Confluence ────────────────────────────────────────
+CONFLUENCE_URL=https://your-org.atlassian.net/wiki
+CONFLUENCE_EMAIL=your@email.com
+CONFLUENCE_API_TOKEN=ATATT...
+CONFLUENCE_SPACE_KEY=MACH           # Espacio donde se crean páginas PRD/TDD
 ```
 
 ### Variables de Control
@@ -419,6 +428,21 @@ Si necesitas debugging rápido sin builds:
 ```env
 ENABLE_BUILD_VALIDATION=false
 ```
+
+---
+
+## 📄 Integración con Confluence
+
+El orquestador publica automáticamente en Confluence tras cada fase de documentación:
+
+| Fase | Función | Página creada |
+|------|---------|---------------|
+| **PRD** | `create_prd_rationale()` | `[Challenge] PRD Rationale` — resumen ejecutivo + criterios |
+| **ARQ** | `create_arch_tdd()` | `[Challenge] Technical Design Document` — C4 + decisiones técnicas |
+
+Las páginas se crean (o actualizan si ya existen) en el espacio configurado en `CONFLUENCE_SPACE_KEY`. Los errores de Confluence no son fatales — el ciclo continúa aunque falle la publicación.
+
+Los campos `confluence_prd_url` y `confluence_arch_url` en `CycleState` guardan las URLs de las páginas creadas.
 
 ---
 
@@ -662,171 +686,3 @@ SOFTWARE.
 ---
 
 _Construido con ❤️ durante el MACH Race 2026 Hackathon_
-- **Responsive**: Diseño adaptativo con TailwindCSS
-
-### Requisitos
-
-- Node.js 18+ / npm 9+
-- Backend corriendo en `http://localhost:8000` (configurable en `vite.config.js`)
-
-## Integración con Slack en local
-
-Si vas a usar botones reales de Slack contra tu máquina local:
-
-1. Levanta el webhook en el puerto 8000.
-2. Expón ese puerto con `ngrok`:
-
-```bash
-ngrok http 8000
-```
-
-3. Copia la URL pública a tu `.env`:
-
-```env
-WEBHOOK_BASE_URL=https://tu-subdominio.ngrok.io
-```
-
-4. Configura en tu Slack App:
-
-```text
-Interactivity Request URL:
-https://tu-subdominio.ngrok.io/slack/interactive
-```
-
-5. Verifica que el bot tenga permisos para enviar DMs y abrir modales.
-
-## Entregables generados
-
-Los agentes guardan artefactos Markdown en `outputs/`. Algunos nombres esperados en el flujo son:
-
-- `PRDSPECS.md`
-- `UXSPECS.md`
-- `ARQSPECS.md`
-- `DEVSPECS.md`
-- `QASCPECS.md`
-- `INFESPEOS.md`
-- `DEVSECOPS.md`
-
-Además, FastAPI expone esos archivos en:
-
-```text
-http://localhost:8000/deliverables/<archivo>
-```
-
-## Modo de prueba
-
-El helper de LLM soporta `TEST_MODE=true`. En ese modo, las llamadas a modelos retornan contenido stub y no consumen tokens.
-
-```env
-TEST_MODE=true
-```
-
-Esto sirve para validar:
-
-- Flujo del grafo
-- Checkpoints HITL
-- Slack
-- Jira
-- Dashboard
-
-## Cambios recientes (último commit)
-
-Commit `36fc077` — _ciclo lineal y fix slack_:
-
-- **Ciclo secuencial**: se eliminaron los wrappers paralelos `run_ux_arch_parallel` y `run_infra_sec_parallel`. Ahora cada agente (`run_ux`, `run_arch`, `run_infra`, `run_sec`) tiene su propio nodo independiente.
-- **HITL split en dos nodos**: cada checkpoint pasa de ser un solo nodo a dos — `hitl_notify_{fase}` envía el DM y `hitl_{fase}` hace el `interrupt()`. Esto resuelve el bug de DMs duplicados en el replay de LangGraph.
-- **Routing via conditional edges**: los nodos HITL ya no usan `Command(goto=...)` para rutear. El routing se hace con `add_conditional_edges` que leen `current_phase`. Approve avanza la fase, reject la mantiene.
-- **`PhaseName` granular**: los valores en `CycleState` cambiaron de `"ux_arch"` / `"infra_sec"` a `"ux"`, `"arch"`, `"infra"`, `"sec"` como fases independientes.
-- **`hitl_slack_channel`**: nuevo campo en `CycleState` que guarda el canal del DM para poder actualizar el mensaje después de la decisión.
-- **Dashboard granular**: `dashboard/constants.py` ahora muestra 9 fases separadas en la timeline.
-- **`PHASE_HITL_CONFIG` actualizado**: config separada para UX, ARQ, INFRA y SEC con revisores y entregables propios.
-
-## Estado actual y limitaciones conocidas
-
-- El orquestador en [nodes/orchestrator_node.py](nodes/orchestrator_node.py) usa un plan hardcodeado tipo stub en lugar de invocar el modelo del orquestador.
-- Aunque `TEST_MODE=true` evita llamadas al LLM en los nodos que usan `nodes/helper.py`, las credenciales de Slack y Jira siguen siendo necesarias al importar configuración.
-- El checkpointer por defecto es `memory`. Si reinicias el proceso, pierdes el estado pausado del ciclo.
-- Para reanudar ciclos entre procesos o usar el dashboard, usa `CHECKPOINTER=sqlite`.
-- Los nodos `run_ux` y `run_arch` corren secuencialmente (no en paralelo real), igual que `run_infra` y `run_sec`. El grafo los ejecuta uno después del otro.
-
-## Ejemplo de arranque rápido
-
-```bash
-cp .env.example .env
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn api.slack_webhook:app --reload --port 8000
-```
-
-En otra terminal:
-
-```bash
-source .venv/bin/activate
-python main.py
-```
-
-## Troubleshooting
-
-### Falla al arrancar por variables de entorno faltantes
-
-Completa las variables de Slack y Jira en `.env`. Varias se leen con `os.environ[...]` y lanzan excepción si no existen.
-
-### Slack no reanuda el flujo
-
-- Verifica `SLACK_SIGNING_SECRET`
-- Verifica que la URL pública apunte a `/slack/interactive`
-- Revisa que el `thread_id` se esté preservando en los botones
-- Confirma que el proceso del webhook siga vivo
-
-### El dashboard no encuentra el estado
-
-- Asegúrate de usar `CHECKPOINTER=sqlite`
-- Revisa que `SQLITE_PATH` apunte al mismo archivo usado por el ciclo
-- Confirma que estás consultando el `thread_id` correcto
-
-### El ciclo pierde contexto al reiniciar
-
-Eso es esperado con `CHECKPOINTER=memory`. Cambia a `sqlite`.
-
-## Comandos útiles
-
-```bash
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Ejecutar ciclo
-python main.py
-
-# Ejecutar solo webhook
-python main.py webhook
-
-# Ejecutar webhook + ciclo
-python main.py both
-
-# Ejecutar dashboard Streamlit (legacy)
-streamlit run dashboard/app.py --server.port 8501
-
-# Ejecutar frontend Vue.js (Race Control)
-cd frontend && npm run dev
-
-# Build frontend para producción
-cd frontend && npm run build
-
-# Exponer webhook local
-ngrok http 8000
-```
-
-## Convenciones importantes del proyecto
-
-- Cada nodo retorna solo los campos del estado que modifica
-- El `thread_id` siempre viene del estado, no se genera dentro de los nodos
-- Slack y Jira no deben romper el ciclo si fallan; se loguea y se continúa
-- Los handlers de FastAPI son `async`, pero los nodos y tools son síncronos
-- No uses `graph.invoke()` sin pasar `get_graph_config(thread_id)`
-
-## Próximos pasos recomendados
-
-1. Completar un `.env` real de desarrollo.
-2. Mover el orquestador desde stub a llamada real al modelo.
-3. Fijar `CHECKPOINTER=sqlite` como configuración por defecto para desarrollo.
-4. Agregar tests automatizados para el flujo HITL y el webhook.

@@ -6,8 +6,9 @@ con checkpoints Human-in-the-Loop via Slack. Jira para tracking. FastAPI para we
 
 ## Stack
 - Python 3.12 · LangGraph 1.0+ · FastAPI · Pydantic v2
-- `langchain-groq` (Llama 3 vía Groq) · `langchain-anthropic` (reservado P3)
-- `slack-sdk` · `jira` (python-jira) · `uvicorn` · `streamlit`
+- `langchain-openai` (GPT-4o-mini, default) · `langchain-google-genai` (Gemini, multi-provider)
+- `langchain-groq` (Groq, fallback) · `langchain-anthropic` (reservado P3)
+- `slack-sdk` · `jira` (python-jira) · `uvicorn` · `requests` (Confluence API)
 
 ## Claude Code Skills
 
@@ -30,17 +31,20 @@ Verificar instaladas: `/find-skills` en Claude Code.
 ```
 state/cycle_state.py          → CycleState (TypedDict compartido entre todos los nodos)
 graph/mach_graph.py           → StateGraph: build_graph(), get_graph_config()
-nodes/orchestrator_node.py    → init, route, finalize
+nodes/orchestrator_node.py    → init (Speckit plan), route, finalize
 nodes/hitl_node.py            → make_hitl_notify_node(phase) + make_hitl_node(phase)
 nodes/helper.py               → load_prompt(), save_output(), create_llm(), llm_invoke(), get_phase_instructions()
-nodes/<agente>/<agente>_node.py  → 7 nodos LLM reales (Groq)
+nodes/<agente>/<agente>_node.py  → 7 nodos LLM (PRD/UX/ARQ/DEV/QA/INFRA/SEC)
 nodes/<agente>/<agente>_prompt.md → prompts editables sin tocar Python
+nodes/dev/build_validator.py  → setup_repo(), validate_frontend_build(), start_preview_server()
 outputs/                      → entregables generados: PRDSPECS.md, ARQSPECS.md, etc.
+outputs/generated/            → archivos de código generados por DEV-AGENT
 tools/slack_tools.py          → notify_team(), notify_reviewer(), update_hitl_msg()
 tools/jira_tools.py           → create_epic/story/task(), update_issue_status()
+tools/github_tools.py         → get_repo_context(), get_files_content(), create_branch_and_push(), open_pull_request(), get_pr_ci_status()
+tools/confluence_tools.py     → create_prd_rationale(), create_arch_tdd() — publica en Confluence automáticamente
 api/slack_webhook.py          → POST /slack/interactive + /view/{filename} + /deliverables/
-dashboard/app.py              → Streamlit dashboard en tiempo real
-dashboard/components/         → componentes UI separados por sección
+frontend/                     → Dashboard Vue.js 3 (Race Control) — reemplaza Streamlit
 config/settings.py            → todas las env vars (no hardcodear credenciales)
 main.py                       → run_cycle(challenge) — punto de entrada
 docs/diagrama_adlc.md         → tabla humano/agente por fase + diagrama Mermaid
@@ -89,7 +93,7 @@ Ver diagrama completo: `docs/diagrama_adlc.md` · Grafo visual: `docs/grafo_lang
 ```bash
 # Setup
 pip install -r requirements.txt
-cp .env.example .env  # Crítico: GROQ_API_KEY, SLACK_BOT_TOKEN, JIRA_API_TOKEN
+cp .env.example .env  # Crítico: OPENAI_API_KEY, SLACK_BOT_TOKEN, JIRA_API_TOKEN
 
 # Correr el ciclo (requiere webhook corriendo en otra terminal)
 python main.py
@@ -97,8 +101,8 @@ python main.py
 # Servidor webhook + entregables en /deliverables/
 uvicorn api.slack_webhook:app --reload --port 8000
 
-# Dashboard Streamlit (requiere CHECKPOINTER=sqlite en .env)
-streamlit run dashboard/app.py --server.port 8501
+# Dashboard Vue.js (Race Control)
+cd frontend && npm install && npm run dev   # http://localhost:5173
 
 # Exponer webhook a Slack en dev — un solo comando:
 # (arranca cloudflared, captura URL, actualiza .env, levanta uvicorn)
@@ -106,30 +110,36 @@ streamlit run dashboard/app.py --server.port 8501
 bash start_dev.sh
 # → Imprime la URL para pegar en Slack App > Interactivity > Request URL
 
-# Modo test (sin gastar tokens Groq)
+# Modo test (sin gastar tokens)
 TEST_MODE=true python main.py
 
-# Tests (cuando existan)
+# Tests
 pytest tests/ -v
 ```
 
 ## Variables de entorno requeridas
 Ver `.env.example`. Críticas para arrancar:
-`GROQ_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `JIRA_API_TOKEN`
+`OPENAI_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `JIRA_API_TOKEN`
 
-Para el dashboard: `CHECKPOINTER=sqlite`, `DASHBOARD_URL=http://localhost:8501`
+Para Gemini (ARQ/DEV alternativo): `GOOGLE_API_KEY`, `LLM_PROVIDER_ARCH=gemini`, `LLM_MODEL_ARCH=gemini-2.5-flash`
+Para Confluence: `CONFLUENCE_URL`, `CONFLUENCE_EMAIL`, `CONFLUENCE_API_TOKEN`, `CONFLUENCE_SPACE_KEY`
+Para el dashboard: `CHECKPOINTER=sqlite`, `SQLITE_PATH=./mach_cycle.db`
 Para testing sin tokens: `TEST_MODE=true`
 
 ## Modelo por agente
-| Agente | Modelo | Razón |
+| Agente | Modelo default | Env vars para cambiar |
 |---|---|---|
-| Speckit (orchestrator_init) | `llama-3.3-70b-versatile` | Razonamiento complejo — genera plan maestro del challenge |
-| PRD, UX, ARQ, DEV, QA, INFRA, SEC | `llama-3.3-70b-versatile` | Groq free tier, sin rate limits agresivos |
-| Orchestrator (routing) | `llama-3.1-8b-instant` | Routing simple, modelo ligero y rápido |
-| Dev (P3) | Claude Code (subprocess) | Escribe y ejecuta código real |
+| Speckit (orchestrator_init) | `gpt-4o-mini` (OpenAI) | `MODEL_SPECKIT` |
+| PRD, UX | `gpt-4o-mini` (OpenAI) | `MODEL_PRD`, `MODEL_UX` |
+| ARQ | `gemini-2.5-flash` (Gemini) | `LLM_PROVIDER_ARCH`, `LLM_MODEL_ARCH` |
+| DEV | `gemini-2.5-flash` (Gemini) | `LLM_PROVIDER_DEV`, `LLM_MODEL_DEV` |
+| QA, INFRA, SEC | `gpt-4o-mini` (OpenAI) | `MODEL_QA`, `MODEL_INFRA`, `MODEL_SECURITY` |
+| Orchestrator (routing) | `gpt-4o-mini` (OpenAI) | `MODEL_ORCHESTRATOR` |
+| Dev (P3) | Claude Code (subprocess) | — |
 
-> Modelos en `config/settings.py`. `create_llm(model)` en `nodes/helper.py` es el único punto para cambiar proveedor.
-> Speckit usa `MODEL_SPECKIT` (env var `MODEL_SPECKIT`). Para P3 cambiar a `claude-sonnet-4-6`.
+> Modelos en `config/settings.py`. `create_llm(model, provider)` en `nodes/helper.py` es el único punto de cambio de proveedor.
+> Detección automática de proveedor: modelos que empiezan con `gpt-`, `o1`, `o3`, `o4` → openai; `gemini` → gemini explícito; resto → groq.
+> `OPEN_AI_KEY` en settings.py; `create_llm` lee `OPENAI_API_KEY` directamente del entorno — usar el nombre estándar (`OPENAI_API_KEY`) en `.env`.
 
 ## Flujo Speckit (planificación al inicio del ciclo)
 
@@ -191,8 +201,11 @@ Cada flecha tiene un checkpoint HITL individual. Si se rechaza, el agente re-cor
 - No usar `InMemorySaver` en producción — cambiar a `SqliteSaver`
 - No hardcodear `thread_id` — siempre viene de `state["thread_id"]`
 - No hacer `graph.invoke()` sin pasar `config = get_graph_config(thread_id)`
-- No usar `MODEL_ORCHESTRATOR` para speckit — es 8b-instant, solo sirve para routing
 - No agregar `get_phase_instructions()` dentro de los nodos — siempre via `nodes/helper.py`
+- No definir `_parse_generated_files` duplicada en `dev_node.py` — solo existe el formato `## FILE: path` (Markdown); el formato `<<<FILE:>>>` fue eliminado
+- No retornar desde un nodo campos que no existen en `CycleState` — LangGraph lanza `ValueError`
+- No usar `save_output()` en comparaciones — retorna `Path`, no `str`
+- No confundir `OPEN_AI_KEY` (settings.py, legacy) con `OPENAI_API_KEY` (lo que lee `create_llm` del entorno)
 
 ## @imports para contexto adicional
 @state/cycle_state.py
