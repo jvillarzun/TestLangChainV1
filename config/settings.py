@@ -68,3 +68,10 @@ SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
 GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "")
 REPO_FE_NAME    = os.environ.get("REPO_FE_NAME", "mach-frontend-test-hackathon")
+
+
+# ── Confluence ──────────────────────────────────────────────────────────────────────────
+CONFLUENCE_URL       = os.environ.get("CONFLUENCE_URL", "")
+CONFLUENCE_EMAIL     = os.environ.get("CONFLUENCE_EMAIL", "")
+CONFLUENCE_API_TOKEN = os.environ.get("CONFLUENCE_API_TOKEN", "")
+CONFLUENCE_SPACE_KEY = os.environ.get("CONFLUENCE_SPACE_KEY", "MACH")
