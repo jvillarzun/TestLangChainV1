@@ -251,8 +251,15 @@ def create_branch_and_push(
             if not path:
                 print(f"❌ [GitHub] Archivo {idx}/{len(changes)}: SIN PATH - saltando")
                 continue
-
+            
+            # 🔧 PROBLEMA 1 FIX: Decodificar \n literales a saltos de línea reales
+            # Si el LLM devolvió "\\n" en el JSON, Python lo parsea como "\n" (backslash + n)
+            # Necesitamos convertir eso a saltos de línea reales antes de enviar a GitHub
             print(f"📝 [GitHub] Archivo {idx}/{len(changes)}: {path}")
+            if '\\n' in content or '\\t' in content or '\\r' in content:
+                print(f"   🔧 Detectados escapes literales - decodificando...")
+                content = content.replace('\\n', '\n').replace('\\t', '\t').replace('\\r', '\r')
+            
             try:
                 print(f"   🔍 Verificando si existe en rama {branch_name}...")
                 existing = repo.get_contents(path, ref=branch_name)

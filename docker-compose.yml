@@ -13,13 +13,21 @@ services:
       # Forzar SQLite y apuntar al volumen compartido
       CHECKPOINTER: sqlite
       SQLITE_PATH: /app/data/mach_cycle.db
+      # Habilitar validación de builds y auto-sanación
+      ENABLE_BUILD_VALIDATION: "true"
     ports:
       - "8000:8000"
+      - "3001:3001"  # Puerto para preview server de frontend
     volumes:
       # Base de datos SQLite compartida con el dashboard
       - mach-data:/app/data
       # Entregables generados por los agentes
       - mach-outputs:/app/outputs
+      # Cache del modelo ONNX de ChromaDB (79MB, se descarga solo la primera vez)
+      - chroma-cache:/root/.cache/chroma
+      # Repositorios clonados para build validation
+      - mach-repos:/tmp/repos
+
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -71,3 +79,5 @@ volumes:
   mach-outputs:
   # Cache del modelo ONNX de ChromaDB — evita re-descargar 79MB en cada restart
   chroma-cache:
+  # Repositorios clonados para build validation
+  mach-repos:

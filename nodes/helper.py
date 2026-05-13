@@ -60,32 +60,47 @@ def load_prompt(agent: str, **kwargs) -> str:
     class _Safe(dict):
         def __missing__(self, key: str) -> str:
             return "{" + key + "}"
-    return template.format_map(_Safe(kwargs))
+    try:
+        return template.format_map(_Safe(kwargs))
+    except (KeyError, ValueError) as e:
+        # Si falla el format, puede ser que kwargs contenga código con llaves no escapadas
+        print(f"⚠️  [load_prompt] Error formateando prompt de '{agent}': {e}")
+        print(f"   Hint: Verifica que el contenido de kwargs no tenga {{}} sin escapar")
+        print(f"   Keys: {list(kwargs.keys())}")
+        raise
 
 
-def create_llm(model: str) -> Any:
-    """Crea instancia LLM según el modelo solicitado.
-    GROQ_MAX_TOKENS y OPENAI_MAX_TOKENS limitan tokens por respuesta."""
+def create_llm(model: str, provider: str | None = None) -> Any:
+    """Crea instancia LLM. Soporta gemini, openai y groq. Único punto de cambio de proveedor."""
     import os
-    from config.settings import GROQ_API_KEY, OPEN_AI_KEY
 
-    provider = _detect_provider(model)
+    if provider is None:
+        provider = _detect_provider(model)
 
-    if provider == "openai":
+    if provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from config.settings import GOOGLE_API_KEY
+        return ChatGoogleGenerativeAI(
+            model=model,
+            google_api_key=GOOGLE_API_KEY,
+            temperature=0.2,
+            convert_system_message_to_human=True,
+        )
+    elif provider == "openai":
         from langchain_openai import ChatOpenAI
-
-        api_key = os.environ.get("OPENAI_API_KEY") or OPEN_AI_KEY
+        api_key = os.environ.get("OPENAI_API_KEY") or ""
         max_tokens = int(os.environ.get("OPENAI_MAX_TOKENS", 4096))
         return ChatOpenAI(model=model, api_key=api_key, max_tokens=max_tokens)
+    else:  # groq
+        from langchain_groq import ChatGroq
+        from config.settings import GROQ_API_KEY
+        max_tokens = int(os.environ.get("GROQ_MAX_TOKENS", 4096))
+        return ChatGroq(model=model, api_key=GROQ_API_KEY, max_tokens=max_tokens)
 
-    from langchain_groq import ChatGroq
-    max_tokens = int(os.environ.get("GROQ_MAX_TOKENS", 4096))
-    return ChatGroq(model=model, api_key=GROQ_API_KEY, max_tokens=max_tokens)
 
-
-def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str) -> tuple[str, dict]:
+def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str, provider: str | None = None) -> tuple[str, dict]:
     """
-    Wrapper de llamada LLM con soporte TEST_MODE.
+    Wrapper de llamada LLM con soporte TEST_MODE y multi-provider.
     Retorna (content, usage_dict). El caller agrega "agent" al usage_dict.
 
     En TEST_MODE retorna stub_content con usage en ceros.
@@ -99,7 +114,7 @@ def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: 
         return stub_content, _zero_usage
 
     from langchain_core.messages import SystemMessage, HumanMessage
-    llm = create_llm(model)
+    llm = create_llm(model, provider=provider)
     t0 = time.time()
     response = llm.invoke([
         SystemMessage(content=system_prompt),

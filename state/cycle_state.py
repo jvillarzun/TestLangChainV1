@@ -101,6 +101,9 @@ class CycleState(TypedDict):
     dev_pr_urls: Annotated[list[str], operator.add]
     """URLs de todos los Pull Requests abiertos por el dev-agent (BE + FE)."""
 
+    preview_url: Optional[str]
+    """URL del servidor de preview si el build fue exitoso y ENABLE_BUILD_VALIDATION=true."""
+
     qa_content: Optional[str]
     """Contenido completo del QASPECS.md generado."""
 
@@ -226,6 +229,7 @@ def initial_state(
         dev_content=None,
         dev_pr_url=None,
         dev_pr_urls=[],
+        preview_url=None,
         qa_content=None,
         qa_passed=None,
         infra_content=None,

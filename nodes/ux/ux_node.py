@@ -1,9 +1,10 @@
+from pathlib import Path
 from state.cycle_state import CycleState
 from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
+from config.settings import MODEL_UX, REPO_FE_NAME, MOCK_EARLY_AGENTS
 from tools.github_tools import get_repo_context
-from config.settings import MODEL_UX, REPO_FE_NAME
 
 
 def _extract_component_list(repo_tree: list[str]) -> str:
@@ -23,6 +24,24 @@ def _extract_component_list(repo_tree: list[str]) -> str:
 def run_ux_node(state: CycleState) -> dict:
     """Nodo UX — genera UXSPECS.md desde PRD aprobado."""
     print("\n🎨 UX-AGENT: Generando UXSPECS.md...")
+
+    # ── Mock para pruebas rápidas sin gastar tokens ───────────────────────────
+    if MOCK_EARLY_AGENTS:
+        print("⚡ [UX] Usando mock estático. Saltando LLM.")
+        mock_path = Path(__file__).parent.parent.parent / "mocks" / "mock_uxspecs.md"
+        if mock_path.exists():
+            ux_content = mock_path.read_text(encoding="utf-8")
+            output_path = save_output("UXSPECS.md", ux_content)
+            print(f"   💾 Mock guardado en {output_path}")
+            print(f"   ✅ UXSPECS.md mock ({len(ux_content)} chars)")
+            return {
+                "ux_content":      ux_content,
+                "error_phase":     None,
+                "error_message":   None,
+                "jira_story_keys": [],
+            }
+        else:
+            print(f"   ⚠️  Mock no encontrado en {mock_path}. Ejecutando LLM normal.")
 
     feedback = _get_last_feedback(state, "ux")
     if feedback:
