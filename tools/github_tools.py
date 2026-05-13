@@ -358,7 +358,7 @@ def open_pull_request(
 
 # ── get_pr_ci_status ──────────────────────────────────────────────────────────
 
-def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, str]:
+def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, Any]:
     """
     Consulta el estado del CI (GitHub Actions check runs) para un PR.
 
@@ -367,13 +367,14 @@ def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, str]:
             "status":      "success" | "failure" | "pending" | "no_ci" | "error",
             "summary":     texto listo para inyectar en el prompt QA,
             "details_url": url del PR,
+            "checks":      lista de {name, status, conclusion} para cada check run,
         }
     """
     import re as _re
 
     m = _re.search(r"/pull/(\d+)", pr_url)
     if not m:
-        return {"status": "error", "summary": "URL de PR inválida — no se pudo obtener CI status", "details_url": pr_url}
+        return {"status": "error", "summary": "URL de PR inválida — no se pudo obtener CI status", "details_url": pr_url, "checks": []}
 
     pr_number = int(m.group(1))
     print(f"   🔍 [GitHub CI] Consultando CI para PR #{pr_number} en {repo_name}...")
@@ -392,8 +393,10 @@ def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, str]:
             print(f"   ⚠️  [GitHub CI] check_runs no disponible: {e} — usando combined status")
             check_runs = []
 
+        checks = [{"name": r.name, "status": r.status, "conclusion": r.conclusion} for r in check_runs]
+
         if check_runs:
-            pending    = [r for r in check_runs if r.status != "completed"]
+            pending     = [r for r in check_runs if r.status != "completed"]
             conclusions = [r.conclusion for r in check_runs if r.status == "completed"]
 
             if pending:
@@ -420,8 +423,8 @@ def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, str]:
             lines     = [f"CI: **{overall.upper()}** ({combined.total_count} status checks) | PR: {pr_url}"]
 
         print(f"   {'✅' if overall == 'success' else '❌' if overall == 'failure' else '⏳'} [GitHub CI] Status: {overall}")
-        return {"status": overall, "summary": "\n".join(lines), "details_url": pr_url}
+        return {"status": overall, "summary": "\n".join(lines), "details_url": pr_url, "checks": checks}
 
     except Exception as exc:
         print(f"   ❌ [GitHub CI] Error: {exc}")
-        return {"status": "error", "summary": f"No se pudo obtener CI status: {exc}", "details_url": pr_url}
+        return {"status": "error", "summary": f"No se pudo obtener CI status: {exc}", "details_url": pr_url, "checks": []}

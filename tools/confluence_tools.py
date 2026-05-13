@@ -158,6 +158,272 @@ def _update_page(page_id: str, title: str, body: str) -> str | None:
         return None
 
 
+# ── TDD document (Arquitecto) ────────────────────────────────────────────────
+
+def create_arch_tdd(
+    challenge_name: str,
+    challenge_description: str,
+    arch_content: str,
+    thread_id: str,
+    jira_epic_key: str | None = None,
+    confluence_prd_url: str | None = None,
+) -> str | None:
+    """
+    Crea (o actualiza) una página Confluence con el Technical Design Document (TDD).
+
+    Extrae del ARQSPECS.md las secciones técnicas y las presenta con macros
+    nativas de Confluence: paneles de info/note, bloques de código Mermaid,
+    tablas de API Contract y task list de Action Items.
+
+    Retorna la URL de la página creada/actualizada, o None si falla.
+    """
+    title = f"[MACH Race] {challenge_name} — Architecture TDD"
+    body = _build_tdd_body(
+        challenge_name=challenge_name,
+        challenge_description=challenge_description,
+        arch_content=arch_content,
+        thread_id=thread_id,
+        jira_epic_key=jira_epic_key,
+        confluence_prd_url=confluence_prd_url,
+    )
+
+    existing_id = _find_page_by_title(title)
+    if existing_id:
+        return _update_page(existing_id, title, body)
+    else:
+        return _create_page(title, body)
+
+
+def _build_tdd_body(
+    challenge_name: str,
+    challenge_description: str,
+    arch_content: str,
+    thread_id: str,
+    jira_epic_key: str | None,
+    confluence_prd_url: str | None,
+) -> str:
+    """Genera el TDD en Confluence Storage Format con secciones ricas."""
+
+    # ── Extraer secciones del ARQSPECS.md ────────────────────────────────────
+    vision        = _extract_section(arch_content, "Visi") or _extract_section(arch_content, "Resumen")
+    api_contract  = _extract_section(arch_content, "API Contract") or _extract_section(arch_content, "API") or _extract_section(arch_content, "Interfaces")
+    modelo_datos  = _extract_section(arch_content, "Modelo de datos") or _extract_section(arch_content, "Persistencia") or _extract_section(arch_content, "Base de datos")
+    adr           = _extract_section(arch_content, "ADR") or _extract_section(arch_content, "Decisiones")
+    no_funcional  = _extract_section(arch_content, "Requisitos no funcionales") or _extract_section(arch_content, "No funcionales")
+    stack         = _extract_section(arch_content, "Stack tecnol") or _extract_section(arch_content, "Stack")
+    seguridad     = _extract_section(arch_content, "Seguridad")
+    eng_plan      = _extract_section(arch_content, "Engineering Plan") or _extract_section(arch_content, "Tareas") or _extract_section(arch_content, "Action Items")
+
+    # ── Extraer TODOS los bloques de código (``` ... ```) como diagramas ─────
+    diagram_sections = []
+    for match in re.finditer(r"(##\s*\d*\.?\s*Diagrama[^\n]*)\n", arch_content):
+        heading = match.group(1).strip()
+        section_content = _extract_section(arch_content, re.sub(r'^#+\s*\d*\.?\s*', '', heading))
+        if section_content:
+            diagram_sections.append((heading, section_content))
+
+    # Fallback: buscar todos los code blocks directamente
+    all_code_blocks = re.findall(r"```(\w*)\s*\n(.*?)```", arch_content, re.DOTALL)
+
+    # ── Referencias ──────────────────────────────────────────────────────────
+    prd_ref = ""
+    if confluence_prd_url:
+        prd_ref = f'<li>📄 PRD Rationale: <a href="{confluence_prd_url}">Ver documento</a></li>'
+    jira_ref = ""
+    if jira_epic_key:
+        jira_ref = (
+            f'<li>🎫 Jira Epic: <a href="{CONFLUENCE_URL.rstrip("/")}/browse/{jira_epic_key}">'
+            f'{jira_epic_key}</a></li>'
+        )
+
+    # ── Diagramas C4/Arquitectura ────────────────────────────────────────────
+    diagrams_html = ""
+    if diagram_sections:
+        for heading, content in diagram_sections:
+            clean_heading = re.sub(r'^#+\s*', '', heading)
+            # Extraer code blocks de dentro de la sección
+            inner_blocks = re.findall(r"```(\w*)\s*\n(.*?)```", content, re.DOTALL)
+            if inner_blocks:
+                for lang, block in inner_blocks:
+                    diagrams_html += f"""
+<h3>{_esc(clean_heading)}</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="language">{lang or 'text'}</ac:parameter>
+  <ac:parameter ac:name="title">{_esc(clean_heading)}</ac:parameter>
+  <ac:parameter ac:name="linenumbers">false</ac:parameter>
+  <ac:plain-text-body><![CDATA[{block.strip()}]]></ac:plain-text-body>
+</ac:structured-macro>
+"""
+            else:
+                # La sección tiene texto sin code blocks, renderizar como code
+                diagrams_html += f"""
+<h3>{_esc(clean_heading)}</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="language">text</ac:parameter>
+  <ac:parameter ac:name="title">{_esc(clean_heading)}</ac:parameter>
+  <ac:parameter ac:name="linenumbers">false</ac:parameter>
+  <ac:plain-text-body><![CDATA[{content.strip()}]]></ac:plain-text-body>
+</ac:structured-macro>
+"""
+    elif all_code_blocks:
+        # No hay secciones de diagrama explícitas, buscar bloques de código sueltos
+        # que no sean json (json es probablemente Engineering Plan)
+        for i, (lang, block) in enumerate(all_code_blocks, 1):
+            if lang == "json":
+                continue
+            diagrams_html += f"""
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="language">{lang or 'text'}</ac:parameter>
+  <ac:parameter ac:name="title">Diagrama {i}</ac:parameter>
+  <ac:parameter ac:name="linenumbers">false</ac:parameter>
+  <ac:plain-text-body><![CDATA[{block.strip()}]]></ac:plain-text-body>
+</ac:structured-macro>
+"""
+
+    diagrams_section = ""
+    if diagrams_html:
+        diagrams_section = f"<h2>Diagramas de Arquitectura</h2>\n{diagrams_html}"
+
+    # ── API Contract como Code Snippet ───────────────────────────────────────
+    api_html = ""
+    if api_contract:
+        api_html = f"""
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="language">yaml</ac:parameter>
+  <ac:parameter ac:name="title">API Contract</ac:parameter>
+  <ac:parameter ac:name="linenumbers">true</ac:parameter>
+  <ac:plain-text-body><![CDATA[{api_contract}]]></ac:plain-text-body>
+</ac:structured-macro>
+"""
+    else:
+        api_html = "<p><em>Ver ARQSPECS.md para detalle completo.</em></p>"
+
+    # ── Modelo de datos ──────────────────────────────────────────────────────
+    datos_html = _md_to_storage(modelo_datos) if modelo_datos else "<p><em>Ver ARQSPECS.md para detalle completo.</em></p>"
+
+    # ── ADRs como paneles expandibles ────────────────────────────────────────
+    adr_html = ""
+    if adr:
+        # Buscar sub-secciones ADR-XXX
+        adr_entries = re.split(r'(?=###\s+ADR-)', adr)
+        if len(adr_entries) > 1:
+            for entry in adr_entries:
+                entry = entry.strip()
+                if not entry:
+                    continue
+                title_match = re.match(r'###\s+(ADR-\d+[^\n]*)', entry)
+                adr_title = title_match.group(1) if title_match else "ADR"
+                adr_body = entry[title_match.end():].strip() if title_match else entry
+                adr_html += f"""
+<ac:structured-macro ac:name="expand">
+  <ac:parameter ac:name="title">{_esc(adr_title)}</ac:parameter>
+  <ac:rich-text-body>
+    {_md_to_storage(adr_body)}
+  </ac:rich-text-body>
+</ac:structured-macro>
+"""
+        else:
+            adr_html = _md_to_storage(adr)
+    else:
+        adr_html = "<p><em>Ver ARQSPECS.md para detalle completo.</em></p>"
+
+    # ── Requisitos no funcionales ────────────────────────────────────────────
+    nfr_html = _md_to_storage(no_funcional) if no_funcional else ""
+    nfr_section = f"<h2>Requisitos No Funcionales</h2>\n{nfr_html}" if nfr_html else ""
+
+    # ── Stack tecnológico como tabla ─────────────────────────────────────────
+    stack_html = ""
+    if stack:
+        table = _md_table_to_html(stack)
+        if table:
+            stack_html = table
+        else:
+            stack_html = _md_to_storage(stack)
+    stack_section = f"<h2>Stack Tecnológico</h2>\n{stack_html}" if stack_html else ""
+
+    # ── Seguridad (note panel) ───────────────────────────────────────────────
+    security_section = ""
+    if seguridad:
+        security_section = f"""
+<h2>Consideraciones de Seguridad</h2>
+<ac:structured-macro ac:name="note">
+  <ac:parameter ac:name="title">Puntos críticos de seguridad</ac:parameter>
+  <ac:rich-text-body>
+    {_md_to_storage(seguridad)}
+  </ac:rich-text-body>
+</ac:structured-macro>
+"""
+
+    # ── Engineering Plan como task list ───────────────────────────────────────
+    eng_html = ""
+    if eng_plan:
+        # Si tiene un bloque JSON, mostrarlo como code
+        json_match = re.search(r"```json\s*\n(.*?)```", eng_plan, re.DOTALL)
+        if json_match:
+            eng_html = f"""
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="language">json</ac:parameter>
+  <ac:parameter ac:name="title">Engineering Plan</ac:parameter>
+  <ac:parameter ac:name="linenumbers">true</ac:parameter>
+  <ac:plain-text-body><![CDATA[{json_match.group(1).strip()}]]></ac:plain-text-body>
+</ac:structured-macro>
+"""
+        else:
+            eng_html = _md_to_storage(eng_plan)
+    eng_section = f"<h2>Engineering Plan / Action Items</h2>\n{eng_html}" if eng_html else ""
+
+    return f"""
+<h1>Technical Design Document — {_esc(challenge_name)}</h1>
+
+<ac:structured-macro ac:name="info">
+  <ac:parameter ac:name="title">Documento generado automáticamente por el Agente Arquitecto</ac:parameter>
+  <ac:rich-text-body>
+    <p>Generado por el agente ARQ del ciclo ADLC · MACH Race 2026</p>
+    <p>Thread ID: <code>{thread_id}</code> · {_now()}</p>
+    <ul>{prd_ref}{jira_ref}</ul>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<h2>Visión Arquitectónica</h2>
+{_md_to_storage(vision) if vision else f"<p>{_esc(challenge_description)}</p>"}
+
+<h2>Referencias y Trazabilidad</h2>
+<table>
+  <tbody>
+    <tr><th>Artefacto</th><th>Enlace</th></tr>
+    {'<tr><td>PRD Rationale</td><td><a href="' + confluence_prd_url + '">Ver en Confluence</a></td></tr>' if confluence_prd_url else '<tr><td>PRD Rationale</td><td><em>No disponible</em></td></tr>'}
+    {'<tr><td>Jira Epic</td><td><a href="' + CONFLUENCE_URL.rstrip("/") + "/browse/" + jira_epic_key + '">' + jira_epic_key + '</a></td></tr>' if jira_epic_key else ''}
+  </tbody>
+</table>
+
+{diagrams_section}
+
+<h2>Especificación de Interfaces (API Contract)</h2>
+{api_html}
+
+<h2>Diseño de Persistencia</h2>
+{datos_html}
+
+<h2>Decisiones de Diseño (ADR)</h2>
+{adr_html}
+
+{nfr_section}
+
+{stack_section}
+
+{security_section}
+
+{eng_section}
+
+<h2>Documento completo (ARQSPECS.md)</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="language">markdown</ac:parameter>
+  <ac:parameter ac:name="title">ARQSPECS.md</ac:parameter>
+  <ac:plain-text-body><![CDATA[{arch_content}]]></ac:plain-text-body>
+</ac:structured-macro>
+""".strip()
+
+
 def _find_page_by_title(title: str) -> str | None:
     """Busca una página por título en el space. Retorna el ID si existe."""
     try:
@@ -322,6 +588,26 @@ def _md_to_storage(text: str) -> str:
     if in_list:
         lines.append("</ul>")
     return "\n".join(lines)
+
+
+def _md_table_to_html(text: str) -> str | None:
+    """Convierte una tabla markdown a HTML. Retorna None si no encuentra tabla."""
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    # Buscar líneas que parezcan tabla (|col|col|)
+    table_lines = [l for l in lines if l.startswith("|") and l.endswith("|")]
+    if len(table_lines) < 2:
+        return None
+
+    html = "<table>\n  <tbody>\n"
+    for i, row in enumerate(table_lines):
+        cells = [c.strip() for c in row.strip("|").split("|")]
+        # Saltar la línea separadora (|---|---|)
+        if all(re.match(r'^[-:]+$', c) for c in cells):
+            continue
+        tag = "th" if i == 0 else "td"
+        html += "    <tr>" + "".join(f"<{tag}>{_esc(c)}</{tag}>" for c in cells) + "</tr>\n"
+    html += "  </tbody>\n</table>"
+    return html
 
 
 def _esc(text: str) -> str:

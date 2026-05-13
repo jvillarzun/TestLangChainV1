@@ -6,6 +6,7 @@ from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invok
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
 from tools.github_tools import get_repo_context
+from tools.confluence_tools import create_arch_tdd
 from config.settings import MODEL_ARCHITECT, LLM_PROVIDER_ARCH, LLM_MODEL_ARCH, REPO_FE_NAME
 
 def _format_context(ctx: dict) -> str:
@@ -117,13 +118,24 @@ def run_arch_node(state: CycleState) -> dict:
         epic_key=state.get("jira_epic_key"),
     )
 
-    print(f"   ✅ ARQSPECS.md generado ({len(arch_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
+    confluence_url = create_arch_tdd(
+        challenge_name=state["challenge_name"],
+        challenge_description=state["challenge_description"],
+        arch_content=arch_content,
+        thread_id=state["thread_id"],
+        jira_epic_key=state.get("jira_epic_key"),
+        confluence_prd_url=state.get("confluence_prd_url"),
+    )
+
+    print(f"   \u2705 ARQSPECS.md generado ({len(arch_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
+    print(f"   \U0001f4c4 Confluence TDD: {confluence_url or 'N/A'}")
 
     return {
-        "arch_content":    arch_content,
-        "error_phase":     None,
-        "error_message":   None,
-        "jira_story_keys": [story_key] if story_key else [],
-        "github_plan":     _extract_engineering_plan(arch_content),
-        "token_usage":     [_usage],
+        "arch_content":       arch_content,
+        "error_phase":        None,
+        "error_message":      None,
+        "jira_story_keys":    [story_key] if story_key else [],
+        "github_plan":        _extract_engineering_plan(arch_content),
+        "confluence_arch_url": confluence_url,
+        "token_usage":        [_usage],
     }
