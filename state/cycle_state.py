@@ -80,6 +80,9 @@ class CycleState(TypedDict):
     prd_content: Optional[str]
     """Contenido completo del PRDSPECS.md generado."""
 
+    confluence_prd_url: Optional[str]
+    """URL de la página Confluence con el PRD Rationale."""
+
     ux_content: Optional[str]
     """Contenido completo del UXSPECS.md generado."""
 
@@ -99,13 +102,13 @@ class CycleState(TypedDict):
     """URL del servidor de preview si el build fue exitoso y ENABLE_BUILD_VALIDATION=true."""
 
     qa_content: Optional[str]
-    """Contenido completo del QASCPECS.md generado."""
+    """Contenido completo del QASPECS.md generado."""
 
     qa_passed: Optional[bool]
     """True si QA aprobó todos los criterios, False si encontró blockers."""
 
     infra_content: Optional[str]
-    """Contenido completo del INFESPEOS.md generado."""
+    """Contenido completo del INFESPECS.md generado."""
 
     security_content: Optional[str]
     """Contenido completo del DEVSECOPS.md generado."""
@@ -154,6 +157,20 @@ class CycleState(TypedDict):
     # ──────────────────────────────────────────────────────────────────────────
     # ERRORES Y REINTENTOS
     # ──────────────────────────────────────────────────────────────────────────
+    token_usage: Annotated[list[dict[str, Any]], operator.add]
+    """
+    Uso de tokens por llamada LLM. Cada entrada:
+    {
+        "agent":         "prd",
+        "model":         "llama-3.3-70b-versatile",
+        "input_tokens":  1200,
+        "output_tokens": 3400,
+        "total_tokens":  4600,
+        "cost_usd":      0.003401,
+        "duration_s":    8.3,
+    }
+    """
+
     error_phase: Optional[PhaseName]
     """Fase donde ocurrió el último error."""
 
@@ -202,6 +219,7 @@ def initial_state(
         current_phase="init",
         # Deliverables — vacíos hasta que cada agente corra
         prd_content=None,
+        confluence_prd_url=None,
         ux_content=None,
         arch_content=None,
         dev_content=None,
@@ -221,6 +239,8 @@ def initial_state(
         # Jira
         jira_epic_key=None,
         jira_story_keys=[],
+        # ROI
+        token_usage=[],
         # Errores
         error_phase=None,
         error_message=None,

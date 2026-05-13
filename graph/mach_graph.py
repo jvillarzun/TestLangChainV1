@@ -57,8 +57,17 @@ from nodes.sec.sec_node import run_security_node
 from config.settings import CHECKPOINTER, SQLITE_PATH
 
 
+_MAX_RETRIES = 3
+
+
 def _route_hitl(state) -> str:
-    """Lee current_phase para rutear post-HITL."""
+    """
+    Rutea post-HITL según current_phase.
+    Si retry_count >= MAX_RETRIES en reject → fuerza finalize para evitar loop infinito.
+    """
+    if state.get("retry_count", 0) >= _MAX_RETRIES:
+        print(f"   ⚠️  MAX_RETRIES ({_MAX_RETRIES}) alcanzado — forzando finalize")
+        return "done"
     return state.get("current_phase", "prd")
 
 
@@ -113,12 +122,12 @@ def build_graph(checkpointer=None):
     # ── Conditional edges post-HITL ───────────────────────────────────────────
     # current_phase se mantiene en reject → vuelve al mismo agente
     # current_phase avanza en approve   → va al siguiente agente
-    builder.add_conditional_edges("hitl_prd",   _route_hitl, {"prd":   "run_prd",   "ux":    "run_ux"})
-    builder.add_conditional_edges("hitl_ux",    _route_hitl, {"ux":    "run_ux",    "arch":  "run_arch"})
-    builder.add_conditional_edges("hitl_arch",  _route_hitl, {"arch":  "run_arch",  "dev":   "run_dev"})
-    builder.add_conditional_edges("hitl_dev",   _route_hitl, {"dev":   "run_dev",   "qa":    "run_qa"})
-    builder.add_conditional_edges("hitl_qa",    _route_hitl, {"qa":    "run_qa",    "infra": "run_infra"})
-    builder.add_conditional_edges("hitl_infra", _route_hitl, {"infra": "run_infra", "sec":   "run_sec"})
+    builder.add_conditional_edges("hitl_prd",   _route_hitl, {"prd":   "run_prd",   "ux":    "run_ux",    "done": "finalize"})
+    builder.add_conditional_edges("hitl_ux",    _route_hitl, {"ux":    "run_ux",    "arch":  "run_arch",  "done": "finalize"})
+    builder.add_conditional_edges("hitl_arch",  _route_hitl, {"arch":  "run_arch",  "dev":   "run_dev",   "done": "finalize"})
+    builder.add_conditional_edges("hitl_dev",   _route_hitl, {"dev":   "run_dev",   "qa":    "run_qa",    "done": "finalize"})
+    builder.add_conditional_edges("hitl_qa",    _route_hitl, {"qa":    "run_qa",    "infra": "run_infra", "done": "finalize"})
+    builder.add_conditional_edges("hitl_infra", _route_hitl, {"infra": "run_infra", "sec":   "run_sec",   "done": "finalize"})
     builder.add_conditional_edges("hitl_sec",   _route_hitl, {"sec":   "run_sec",   "done":  "finalize"})
 
     # ── Checkpointer ──────────────────────────────────────────────────────────

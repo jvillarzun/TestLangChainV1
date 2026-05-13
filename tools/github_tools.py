@@ -10,7 +10,6 @@ Responsabilidades:
 
 Usa PyGithub. Requiere en .env:
   GITHUB_TOKEN, GITHUB_USERNAME,
-  REPO_BE_NAME (mach-backend-test-hackathon),
   REPO_FE_NAME (mach-frontend-test-hackathon)
 """
 
@@ -25,7 +24,6 @@ from github.Repository import Repository
 from config.settings import (
     GITHUB_TOKEN,
     GITHUB_USERNAME,
-    REPO_BE_NAME,
     REPO_FE_NAME,
 )
 
@@ -33,7 +31,6 @@ from config.settings import (
 print(f"🔑 [GitHub Init] Inicializando cliente GitHub...")
 print(f"🔑 [GitHub Init] Token presente: {'✓' if GITHUB_TOKEN else '✗ FALTA'}")
 print(f"🔑 [GitHub Init] Username: {GITHUB_USERNAME or '✗ FALTA'}")
-print(f"🔑 [GitHub Init] Repo BE: {REPO_BE_NAME}")
 print(f"🔑 [GitHub Init] Repo FE: {REPO_FE_NAME}")
 
 _gh = None
@@ -51,15 +48,58 @@ except Exception as e:
     print(f"⚠️  [GitHub Init] El ciclo ADLC continuará pero sin crear PRs en la fase DEV")
     _gh = Github(GITHUB_TOKEN) if GITHUB_TOKEN else None  # Cliente sin validar
 
-# Archivos clave que se incluyen en el contexto por defecto
-_KEY_FILES = [
-    "package.json",
-    "src/app.js",
-    "src/server.js",
-    "src/app/page.tsx",
-    "src/app/layout.tsx",
-    "src/lib/api.ts",
+_COMPONENT_DIRS = {"components", "component", "ui", "atoms", "molecules", "organisms", "widgets", "screens", "views", "layouts"}
+_LIB_DIRS       = {"lib", "utils", "helpers", "services", "store", "context", "hooks", "api"}
+_CODE_EXTS      = {".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".py"}
+
+_ROOT_CONFIGS = [
+    "package.json", "pyproject.toml", "tsconfig.json",
+    "next.config.js", "next.config.mjs", "next.config.ts",
+    "vite.config.ts", "vite.config.js", "tailwind.config.ts", "tailwind.config.js",
 ]
+_ENTRY_POINTS = [
+    "src/app/page.tsx", "app/page.tsx",
+    "src/app/layout.tsx", "app/layout.tsx",
+    "src/pages/index.tsx", "pages/index.tsx",
+    "src/main.tsx", "src/App.tsx",
+    "src/lib/api.ts", "src/utils/api.ts",
+]
+
+
+def _detect_key_files(tree: list[str]) -> list[str]:
+    """
+    Detecta archivos relevantes del repo a partir del árbol ya obtenido.
+    Prioriza: configs raíz → entry points → componentes UI → lib/utils.
+    Cap de 35 archivos para no exceder ventana de contexto.
+    """
+    tree_set = set(tree)
+    selected: list[str] = []
+
+    for name in _ROOT_CONFIGS:
+        if name in tree_set:
+            selected.append(name)
+
+    for path in _ENTRY_POINTS:
+        if path in tree_set and path not in selected:
+            selected.append(path)
+
+    component_files = [
+        f for f in tree
+        if any(seg in _COMPONENT_DIRS for seg in f.split("/"))
+        and any(f.endswith(ext) for ext in _CODE_EXTS)
+        and f not in selected
+    ]
+    selected.extend(component_files[:20])
+
+    lib_files = [
+        f for f in tree
+        if any(seg in _LIB_DIRS for seg in f.split("/"))
+        and any(f.endswith(ext) for ext in _CODE_EXTS)
+        and f not in selected
+    ]
+    selected.extend(lib_files[:10])
+
+    return selected[:35]
 
 
 def _get_repo(repo_name: str) -> Repository:
@@ -70,6 +110,34 @@ def _get_repo(repo_name: str) -> Repository:
         raise RuntimeError("GitHub no disponible - credenciales inválidas")
     full_name = repo_name if "/" in repo_name else f"{GITHUB_USERNAME}/{repo_name}"
     return _gh.get_repo(full_name)
+
+
+# ── get_files_content ────────────────────────────────────────────────────────
+
+def get_files_content(repo_name: str, paths: list[str]) -> dict[str, str]:
+    """
+    Lee el contenido actual de archivos específicos desde default_branch.
+    Retorna {path: contenido} — omite archivos que no existen.
+    """
+    if not paths:
+        return {}
+    try:
+        repo = _get_repo(repo_name)
+        default_branch = repo.default_branch
+        result: dict[str, str] = {}
+        for path in paths:
+            try:
+                cf = repo.get_contents(path, ref=default_branch)
+                if not isinstance(cf, list):
+                    result[path] = cf.decoded_content.decode("utf-8")
+            except UnknownObjectException:
+                pass
+            except Exception as exc:
+                print(f"[GitHub] No se pudo leer {path}: {exc}")
+        return result
+    except Exception as exc:
+        print(f"[GitHub] Error en get_files_content({repo_name}): {exc}")
+        return {}
 
 
 # ── get_repo_context ──────────────────────────────────────────────────────────
@@ -97,15 +165,18 @@ def get_repo_context(repo_name: str) -> dict[str, Any]:
             if item.type == "blob"
         ]
 
-        # Contenido de archivos clave
+        # Detectar archivos clave dinámicamente según estructura real del repo
+        key_paths = _detect_key_files(file_tree)
+        print(f"[GitHub] Archivos clave detectados: {len(key_paths)}")
+
         key_contents: dict[str, str] = {}
-        for path in _KEY_FILES:
+        for path in key_paths:
             try:
                 content_file = repo.get_contents(path, ref=default_branch)
                 if not isinstance(content_file, list):
                     key_contents[path] = content_file.decoded_content.decode("utf-8")
             except UnknownObjectException:
-                pass  # archivo no existe en este repo — omitir
+                pass
             except Exception as exc:
                 print(f"[GitHub] No se pudo leer {path}: {exc}")
 
@@ -176,7 +247,7 @@ def create_branch_and_push(
         for idx, change in enumerate(changes, 1):
             path: str = change.get("path", "")
             content: str = change.get("content", "")
-            
+
             if not path:
                 print(f"❌ [GitHub] Archivo {idx}/{len(changes)}: SIN PATH - saltando")
                 continue
@@ -217,7 +288,7 @@ def create_branch_and_push(
             except Exception as file_exc:
                 print(f"   ❌ ERROR al procesar {path}: {file_exc}")
                 raise
-            
+
             commit_sha = result["commit"].sha
             print(f"   📌 Commit SHA: {commit_sha[:8]}...")
 
@@ -283,3 +354,74 @@ def open_pull_request(
         import traceback
         print(f"❌ [GitHub] Stack trace:\n{traceback.format_exc()}")
         return None
+
+
+# ── get_pr_ci_status ──────────────────────────────────────────────────────────
+
+def get_pr_ci_status(repo_name: str, pr_url: str) -> dict[str, str]:
+    """
+    Consulta el estado del CI (GitHub Actions check runs) para un PR.
+
+    Returns:
+        {
+            "status":      "success" | "failure" | "pending" | "no_ci" | "error",
+            "summary":     texto listo para inyectar en el prompt QA,
+            "details_url": url del PR,
+        }
+    """
+    import re as _re
+
+    m = _re.search(r"/pull/(\d+)", pr_url)
+    if not m:
+        return {"status": "error", "summary": "URL de PR inválida — no se pudo obtener CI status", "details_url": pr_url}
+
+    pr_number = int(m.group(1))
+    print(f"   🔍 [GitHub CI] Consultando CI para PR #{pr_number} en {repo_name}...")
+
+    try:
+        repo = _get_repo(repo_name)
+        pr   = repo.get_pull(pr_number)
+        head_sha = pr.head.sha
+        print(f"   🔍 [GitHub CI] Head SHA: {head_sha[:8]}...")
+
+        # Preferir check runs (GitHub Actions)
+        try:
+            commit     = repo.get_commit(head_sha)
+            check_runs = list(commit.get_check_runs())
+        except Exception as e:
+            print(f"   ⚠️  [GitHub CI] check_runs no disponible: {e} — usando combined status")
+            check_runs = []
+
+        if check_runs:
+            pending    = [r for r in check_runs if r.status != "completed"]
+            conclusions = [r.conclusion for r in check_runs if r.status == "completed"]
+
+            if pending:
+                overall = "pending"
+            elif any(c in ("failure", "timed_out", "cancelled", "action_required") for c in conclusions):
+                overall = "failure"
+            elif all(c in ("success", "neutral", "skipped") for c in conclusions if c):
+                overall = "success"
+            else:
+                overall = "pending"
+
+            icon_map = {"success": "✅", "failure": "❌", "timed_out": "⏱️", "cancelled": "🚫", "neutral": "⚪", "skipped": "⏭️"}
+            lines = [f"CI: **{overall.upper()}** — {len(check_runs)} check(s) | PR: {pr_url}"]
+            for r in check_runs:
+                icon = icon_map.get(r.conclusion or "", "⏳")
+                lines.append(f"  {icon} `{r.name}`: {r.conclusion or r.status}")
+
+        else:
+            # Fallback: commit combined status (legacy branch protection / webhooks)
+            commit   = repo.get_commit(head_sha)
+            combined = commit.get_combined_status()
+            state_map = {"success": "success", "failure": "failure", "error": "failure", "pending": "pending"}
+            overall   = state_map.get(combined.state, "no_ci") if combined.total_count > 0 else "no_ci"
+            lines     = [f"CI: **{overall.upper()}** ({combined.total_count} status checks) | PR: {pr_url}"]
+
+        print(f"   {'✅' if overall == 'success' else '❌' if overall == 'failure' else '⏳'} [GitHub CI] Status: {overall}")
+        return {"status": overall, "summary": "\n".join(lines), "details_url": pr_url}
+
+    except Exception as exc:
+        print(f"   ❌ [GitHub CI] Error: {exc}")
+        return {"status": "error", "summary": f"No se pudo obtener CI status: {exc}", "details_url": pr_url}

@@ -110,56 +110,56 @@ def orchestrator_init_node(state: CycleState) -> dict:
     print(f"   Thread ID: {state['thread_id']}")
     print(f"{'='*60}\n")
 
-    # ── 1. Generar plan con Claude Opus ───────────────────────────────────────
-    # llm = ChatAnthropic(model=MODEL_ORCHESTRATOR, max_tokens=2000)
-    # llm = ChatGoogleGenerativeAI(model=MODEL_ORCHESTRATOR, max_tokens=2000)
+    # ── 1. Plan: pre-aprobado desde frontend o generado por speckit ──────────────
+    import json
+    from nodes.helper import llm_invoke
+    from config.settings import MODEL_SPECKIT
 
-    # criteria_text = "\n".join(f"- {c}" for c in state["challenge_success_criteria"])
+    _speckit_usage = None
 
-    # prompt = PLAN_PROMPT_TEMPLATE.format(
-    #     name=state["challenge_name"],
-    #     type=state["challenge_type"],
-    #     description=state["challenge_description"],
-    #     criteria=criteria_text,
-    # )
+    if state.get("plan_phases"):
+        print("🧠 Plan pre-aprobado recibido — saltando speckit")
+        phases = state["plan_phases"]
+        plan_data = {"analysis": {"domain": "—", "complexity": "—", "key_risks": [], "tech_stack": []}, "phases": phases, "estimated_cycle_minutes": "—"}
+    else:
+        criteria_text = "\n".join(f"- {c}" for c in state["challenge_success_criteria"])
+        user_message = PLAN_PROMPT_TEMPLATE.format(
+            name=state["challenge_name"],
+            type=state["challenge_type"],
+            description=state["challenge_description"],
+            criteria=criteria_text,
+        )
 
-    # print("🧠 Generando plan con Claude Opus...")
-    # response = llm.invoke([
-    #     SystemMessage(content=ORCHESTRATOR_SYSTEM_PROMPT),
-    #     HumanMessage(content=prompt),
-    # ])
+        _stub_plan = {
+            "analysis": {"domain": "test", "complexity": "low", "key_risks": [], "tech_stack": []},
+            "phases": [
+                {"phase": "prd",      "agent": "prd-agent",       "model": "stub", "depends_on": [],              "instructions": "Genera el PRD completo para el challenge.", "key_outputs": ["PRDSPECS.md"]},
+                {"phase": "ux",       "agent": "ux-agent",        "model": "stub", "depends_on": ["prd"],         "instructions": "Diseña la experiencia de usuario basada en el PRD.", "key_outputs": ["UXSPECS.md"]},
+                {"phase": "arch",     "agent": "architect-agent", "model": "stub", "depends_on": ["prd"],         "instructions": "Define la arquitectura técnica del sistema.", "key_outputs": ["ARQSPECS.md"]},
+                {"phase": "dev",      "agent": "dev-agent",       "model": "stub", "depends_on": ["prd", "arch"], "instructions": "Implementa el código según PRD y arquitectura.", "key_outputs": ["DEVSPECS.md"]},
+                {"phase": "qa",       "agent": "qa-agent",        "model": "stub", "depends_on": ["dev"],         "instructions": "Valida la implementación contra criterios del PRD.", "key_outputs": ["QASPECS.md"]},
+                {"phase": "infra",    "agent": "infra-agent",     "model": "stub", "depends_on": ["qa"],          "instructions": "Define infraestructura cloud y CI/CD.", "key_outputs": ["INFESPECS.md"]},
+                {"phase": "security", "agent": "security-agent",  "model": "stub", "depends_on": ["qa"],          "instructions": "Audita seguridad OWASP Top 10 y DevSecOps.", "key_outputs": ["DEVSECOPS.md"]},
+            ],
+            "success_metrics": {"prd": "stub", "ux_arch": "stub", "dev": "stub", "qa": "stub", "infra_sec": "stub"},
+            "estimated_cycle_minutes": 1,
+        }
 
-    # import json
-    # plan_data = json.loads(response.content)
+        print(f"🧠 Generando plan con speckit ({MODEL_SPECKIT})...")
+        try:
+            plan_json_str, _speckit_usage = llm_invoke(
+                model=MODEL_SPECKIT,
+                system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
+                user_message=user_message,
+                stub_content=json.dumps(_stub_plan),
+            )
+            _speckit_usage["agent"] = "orchestrator"
+            plan_data = json.loads(plan_json_str)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"⚠️  Speckit parse error: {e} — usando plan de respaldo")
+            plan_data = _stub_plan
 
-    # ── STUB — plan hardcodeado para probar Jira/Slack sin LLM ───────────────
-    print("🧠 [STUB] Usando plan hardcodeado — LLM desactivado")
-    plan_data = {
-        "analysis": {
-            "domain": "test",
-            "complexity": "low",
-            "key_risks": [],
-            "tech_stack": [],
-        },
-        "phases": [
-            {"phase": "prd",      "agent": "prd-agent",       "model": "stub", "depends_on": [],              "instructions": "stub", "key_outputs": []},
-            {"phase": "ux",       "agent": "ux-agent",        "model": "stub", "depends_on": ["prd"],         "instructions": "stub", "key_outputs": []},
-            {"phase": "arch",     "agent": "architect-agent", "model": "stub", "depends_on": ["prd"],         "instructions": "stub", "key_outputs": []},
-            {"phase": "dev",      "agent": "dev-agent",       "model": "stub", "depends_on": ["prd", "arch"], "instructions": "stub", "key_outputs": []},
-            {"phase": "qa",       "agent": "qa-agent",        "model": "stub", "depends_on": ["dev"],         "instructions": "stub", "key_outputs": []},
-            {"phase": "infra",    "agent": "infra-agent",     "model": "stub", "depends_on": ["qa"],          "instructions": "stub", "key_outputs": []},
-            {"phase": "security", "agent": "security-agent",  "model": "stub", "depends_on": ["qa"],          "instructions": "stub", "key_outputs": []},
-        ],
-        "success_metrics": {
-            "prd":      "stub",
-            "ux_arch":  "stub",
-            "dev":      "stub",
-            "qa":       "stub",
-            "infra_sec":"stub",
-        },
-        "estimated_cycle_minutes": 1,
-    }
-    phases = plan_data["phases"]
+        phases = plan_data["phases"]
 
     print(f"✅ Plan generado: {len(phases)} fases")
     for phase in phases:
@@ -194,10 +194,11 @@ def orchestrator_init_node(state: CycleState) -> dict:
 
     # ── 4. Retornar actualizaciones al estado ─────────────────────────────────
     return {
-        "plan_phases":       phases,
-        "current_phase":     "prd",  # La primera fase siempre es PRD
-        "jira_epic_key":     epic_key,
-        "cycle_start_time":  datetime.now().isoformat(),
+        "plan_phases":      phases,
+        "current_phase":    "prd",
+        "jira_epic_key":    epic_key,
+        "cycle_start_time": datetime.now().isoformat(),
+        "token_usage":      [_speckit_usage] if _speckit_usage else [],
     }
 
 
@@ -294,8 +295,8 @@ def _build_report(state: CycleState, approvals: int, rejections: int, duration: 
         ("UX",    "UXSPECS.md",    state.get("ux_content")),
         ("ARQ",   "ARQSPECS.md",   state.get("arch_content")),
         ("DEV",   "DEVSPECS.md",   state.get("dev_content")),
-        ("QA",    "QASCPECS.md",   state.get("qa_content")),
-        ("INFRA", "INFESPEOS.md",  state.get("infra_content")),
+        ("QA",    "QASPECS.md",   state.get("qa_content")),
+        ("INFRA", "INFESPECS.md",  state.get("infra_content")),
         ("SEC",   "DEVSECOPS.md",  state.get("security_content")),
     ]
 
@@ -336,6 +337,45 @@ def _build_report(state: CycleState, approvals: int, rejections: int, duration: 
         for c in state["challenge_success_criteria"]:
             lines.append(f"- {c}")
         lines.append("")
+
+    # ── ROI ─────────────────────────────────────────────────────────────────
+    usage_list = state.get("token_usage", [])
+    if usage_list:
+        total_tokens = sum(u.get("total_tokens", 0) for u in usage_list)
+        total_cost   = sum(u.get("cost_usd", 0.0)   for u in usage_list)
+        total_secs   = sum(u.get("duration_s", 0.0)  for u in usage_list)
+        human_cost   = 6000  # 40h × 7 especialistas × $150/h estimado
+
+        lines += [
+            "---", "",
+            "## ROI — Retorno sobre Inversión", "",
+            "| Métrica | Valor |",
+            "|---------|-------|",
+            f"| Tokens totales consumidos | {total_tokens:,} |",
+            f"| Costo total IA (Groq) | ${total_cost:.4f} USD |",
+            f"| Tiempo total de ejecución | {total_secs:.0f}s ({total_secs/60:.1f} min) |",
+            f"| Costo equivalente humano (est.) | ~${human_cost:,} USD |",
+            f"| Ratio ahorro | {int(human_cost / total_cost):,}x |" if total_cost > 0 else "| Ratio ahorro | ∞ (free tier) |",
+            "",
+            "### Tokens por agente", "",
+            "| Agente | Input | Output | Total | Costo | Tiempo |",
+            "|--------|-------|--------|-------|-------|--------|",
+        ]
+        agent_totals: dict[str, dict] = {}
+        for u in usage_list:
+            k = u.get("agent", "?")
+            if k not in agent_totals:
+                agent_totals[k] = {"input": 0, "output": 0, "total": 0, "cost": 0.0, "secs": 0.0}
+            agent_totals[k]["input"]  += u.get("input_tokens", 0)
+            agent_totals[k]["output"] += u.get("output_tokens", 0)
+            agent_totals[k]["total"]  += u.get("total_tokens", 0)
+            agent_totals[k]["cost"]   += u.get("cost_usd", 0.0)
+            agent_totals[k]["secs"]   += u.get("duration_s", 0.0)
+        for agent, t in agent_totals.items():
+            lines.append(
+                f"| **{agent.upper()}** | {t['input']:,} | {t['output']:,} | {t['total']:,} | ${t['cost']:.4f} | {t['secs']:.1f}s |"
+            )
+        lines += ["", f"> *Costo equivalente humano estimado: 40h × 7 especialistas × $150/h USD.*", ""]
 
     # ── Tabla de entregables ─────────────────────────────────────────────────
     lines += [

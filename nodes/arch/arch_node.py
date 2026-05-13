@@ -2,11 +2,11 @@ import json
 import re
 
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_story
 from tools.slack_tools import notify_team
-from config.settings import MODEL_ARCHITECT, LLM_PROVIDER_ARCH, LLM_MODEL_ARCH, REPO_BE_NAME, REPO_FE_NAME
 from tools.github_tools import get_repo_context
+from config.settings import MODEL_ARCHITECT, LLM_PROVIDER_ARCH, LLM_MODEL_ARCH, REPO_FE_NAME
 
 def _format_context(ctx: dict) -> str:
     """Serializa el contexto de repo a texto para el prompt."""
@@ -60,6 +60,13 @@ def run_arch_node(state: CycleState) -> dict:
     fe_context = _format_context(fe_ctx)
     print(f"   ✔ FE: {len(fe_ctx['tree'])} archivos (Frontend-Only Architecture)")
 
+    try:
+        from rag.rag_helper import get_rag_context
+        _rag_query = get_phase_instructions(state, "arch") or f"{state['challenge_name']} {state['challenge_description']}"
+        _rag = get_rag_context("arch", _rag_query)
+    except Exception:
+        _rag = None
+
     system_prompt = load_prompt(
         "arch",
         challenge_name=state["challenge_name"],
@@ -69,25 +76,30 @@ def run_arch_node(state: CycleState) -> dict:
         feedback=feedback or "Sin feedback previo.",
         fe_context=fe_context,
         repo_fe_name=REPO_FE_NAME,
+        orchestrator_instructions=get_phase_instructions(state, "arch") or "Sin instrucciones adicionales.",
     )
+    if _rag:
+        system_prompt += f"\n\n## Contexto de Knowledge Base (ARCH):\n{_rag}"
+        print(f"   📚 RAG: {len(_rag)} chars de contexto inyectados")
 
     try:
         # Usar proveedor configurado o fallback a Gemini con MODEL_ARCHITECT
         provider = LLM_PROVIDER_ARCH
         model = LLM_MODEL_ARCH if LLM_PROVIDER_ARCH in ["gemini", "openai"] else MODEL_ARCHITECT
         print(f"   🤖 LLM: {provider} | Modelo: {model}")
-        
-        arch_content = llm_invoke(
+
+        arch_content, _usage = llm_invoke(
             model=model,
             system_prompt=system_prompt,
             user_message="Genera el ARQSPECS.md completo según las instrucciones.",
             stub_content="# ARQSPECS.md stub — TEST_MODE activo",
             provider=provider,
         )
+        _usage["agent"] = "arch"
     except Exception as e:
         print(f"[ARCH-AGENT] Error: {e}")
         notify_team(f"❌ ARCHITECT-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "arch", "error_message": str(e), "arch_content": None, "github_plan": None}
+        return {"error_phase": "arch", "error_message": str(e), "arch_content": None, "github_plan": None, "token_usage": []}
 
     output_path = save_output("ARQSPECS.md", arch_content)
     print(f"   💾 Guardado en {output_path}")
@@ -105,7 +117,7 @@ def run_arch_node(state: CycleState) -> dict:
         epic_key=state.get("jira_epic_key"),
     )
 
-    print(f"   ✅ ARQSPECS.md generado ({len(arch_content)} chars)")
+    print(f"   ✅ ARQSPECS.md generado ({len(arch_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
 
     return {
         "arch_content":    arch_content,
@@ -113,4 +125,5 @@ def run_arch_node(state: CycleState) -> dict:
         "error_message":   None,
         "jira_story_keys": [story_key] if story_key else [],
         "github_plan":     _extract_engineering_plan(arch_content),
+        "token_usage":     [_usage],
     }

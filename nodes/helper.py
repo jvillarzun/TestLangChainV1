@@ -1,8 +1,35 @@
+import time
 from pathlib import Path
 from typing import Any
 from state.cycle_state import CycleState
 
 _OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
+
+# Pricing $/1M tokens (input, output)
+_GROQ_PRICING: dict[str, dict[str, float]] = {
+    "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
+    "llama-3.1-8b-instant":    {"input": 0.05, "output": 0.08},
+}
+_OPENAI_PRICING: dict[str, dict[str, float]] = {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o":      {"input": 2.50, "output": 10.00},
+}
+_GROQ_PRICING_DEFAULT = {"input": 0.59, "output": 0.79}
+_OPENAI_PRICING_DEFAULT = {"input": 0.15, "output": 0.60}
+
+
+def _detect_provider(model: str) -> str:
+    if model.startswith(("gpt-", "o1", "o3", "o4")):
+        return "openai"
+    return "groq"
+
+
+def _calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    if _detect_provider(model) == "openai":
+        p = _OPENAI_PRICING.get(model, _OPENAI_PRICING_DEFAULT)
+    else:
+        p = _GROQ_PRICING.get(model, _GROQ_PRICING_DEFAULT)
+    return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
 
 
 def _get_last_feedback(state: CycleState, phase: str) -> str | None:
@@ -43,81 +70,85 @@ def load_prompt(agent: str, **kwargs) -> str:
         raise
 
 
-def create_llm(model: str) -> Any:
-    """
-    Crea instancia LLM. Único lugar para cambiar proveedor.
-    
-    Actualmente: Google Gemini 1.5 Flash vía LangChain.
-    Parámetros optimizados para Gemini:
-    - temperature=0.2: Balance entre creatividad y determinismo
-    - convert_system_message_to_human=True: Recomendado por Google para mejor compatibilidad
-    """
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from config.settings import GOOGLE_API_KEY
-    
-    return ChatGoogleGenerativeAI(
-        model=model,
-        google_api_key=GOOGLE_API_KEY,
-        temperature=0.2,
-        convert_system_message_to_human=True,  # Convierte system messages a formato que Gemini espera
-    )
+def create_llm(model: str, provider: str | None = None) -> Any:
+    """Crea instancia LLM. Soporta gemini, openai y groq. Único punto de cambio de proveedor."""
+    import os
 
+    if provider is None:
+        provider = _detect_provider(model)
 
-def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str, provider: str = "gemini") -> str:
-    """
-    Wrapper de llamada LLM con soporte TEST_MODE y multi-provider.
-
-    Args:
-        model: Nombre del modelo (ej. "gemini-2.5-flash" o "gpt-4o-mini")
-        system_prompt: Prompt del sistema
-        user_message: Mensaje del usuario
-        stub_content: Contenido en TEST_MODE
-        provider: "gemini" (default) o "openai"
-
-    En TEST_MODE retorna stub_content directamente sin llamar al LLM.
-    En modo normal llama al modelo y retorna response.content.
-    Lanza la excepción si el LLM falla (el nodo hace el try/except).
-    """
-    from config.settings import TEST_MODE
-    if TEST_MODE:
-        print("   [TEST_MODE] Usando stub — no se llama al LLM")
-        return stub_content
-
-    from langchain_core.messages import SystemMessage, HumanMessage
-    
-    # Seleccionar proveedor
     if provider == "gemini":
-        # LÓGICA ORIGINAL DE GEMINI (sin cambios)
         from langchain_google_genai import ChatGoogleGenerativeAI
         from config.settings import GOOGLE_API_KEY
-        llm = ChatGoogleGenerativeAI(
+        return ChatGoogleGenerativeAI(
             model=model,
             google_api_key=GOOGLE_API_KEY,
             temperature=0.2,
             convert_system_message_to_human=True,
         )
     elif provider == "openai":
-        # NUEVA OPCIÓN: OpenAI
         from langchain_openai import ChatOpenAI
-        from config.settings import OPENAI_API_KEY
-        llm = ChatOpenAI(
-            model=model,
-            api_key=OPENAI_API_KEY,
-            temperature=0.2,
-        )
-    else:
-        raise ValueError(f"Proveedor '{provider}' no soportado. Usa 'gemini' u 'openai'.")
-    
+        api_key = os.environ.get("OPENAI_API_KEY") or ""
+        max_tokens = int(os.environ.get("OPENAI_MAX_TOKENS", 4096))
+        return ChatOpenAI(model=model, api_key=api_key, max_tokens=max_tokens)
+    else:  # groq
+        from langchain_groq import ChatGroq
+        from config.settings import GROQ_API_KEY
+        max_tokens = int(os.environ.get("GROQ_MAX_TOKENS", 4096))
+        return ChatGroq(model=model, api_key=GROQ_API_KEY, max_tokens=max_tokens)
+
+
+def llm_invoke(model: str, system_prompt: str, user_message: str, stub_content: str, provider: str | None = None) -> tuple[str, dict]:
+    """
+    Wrapper de llamada LLM con soporte TEST_MODE y multi-provider.
+    Retorna (content, usage_dict). El caller agrega "agent" al usage_dict.
+
+    En TEST_MODE retorna stub_content con usage en ceros.
+    Lanza la excepción si el LLM falla (el nodo hace el try/except).
+    """
+    _zero_usage = {"model": model, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0, "duration_s": 0.0}
+
+    from config.settings import TEST_MODE
+    if TEST_MODE:
+        print("   [TEST_MODE] Usando stub — no se llama al LLM")
+        return stub_content, _zero_usage
+
+    from langchain_core.messages import SystemMessage, HumanMessage
+    llm = create_llm(model, provider=provider)
+    t0 = time.time()
     response = llm.invoke([
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_message),
     ])
-    return response.content
+    duration = round(time.time() - t0, 2)
+
+    meta = response.usage_metadata or {}
+    input_tokens  = meta.get("input_tokens", 0)
+    output_tokens = meta.get("output_tokens", 0)
+    total_tokens  = meta.get("total_tokens", input_tokens + output_tokens)
+
+    usage = {
+        "model":         model,
+        "input_tokens":  input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens":  total_tokens,
+        "cost_usd":      round(_calc_cost(model, input_tokens, output_tokens), 6),
+        "duration_s":    duration,
+    }
+    return response.content, usage
+
+
+def get_phase_instructions(state: "CycleState", phase: str) -> str:
+    """Extrae instrucciones del orquestador para esta fase desde plan_phases."""
+    for p in state.get("plan_phases", []):
+        if p.get("phase") == phase:
+            return p.get("instructions", "")
+    return ""
 
 
 def save_output(filename: str, content: str) -> Path:
-    """Guarda contenido en outputs/<filename>. Crea la carpeta si no existe."""
-    _OUTPUTS_DIR.mkdir(exist_ok=True)
+    """Guarda contenido en outputs/<filename>. Crea carpetas intermedias si no existen."""
     path = _OUTPUTS_DIR / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return path

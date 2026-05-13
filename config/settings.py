@@ -15,24 +15,6 @@ load_dotenv()
 # TEST_MODE=true → nodos usan stubs, no llaman al LLM. Ideal para probar HITL/Slack/Jira.
 TEST_MODE: bool = os.environ.get("TEST_MODE", "false").lower() == "true"
 
-# MOCK_EARLY_AGENTS=true → PRD y UX usan archivos estáticos en lugar de LLM
-# Útil para probar solo DEV/QA/etc sin gastar tokens en fases tempranas
-MOCK_EARLY_AGENTS: bool = os.environ.get("MOCK_EARLY_AGENTS", "false").lower() == "true"
-
-GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"  # legacy, no usado
-ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
-GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "") if not TEST_MODE else "test"  # Motor LLM principal
-OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "") if not TEST_MODE else "test"  # OpenAI (opcional)
-
-# Modelos por agente
-MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"       # routing simple, modelo ligero y rápido
-MODEL_PRD          = "llama-3.3-70b-versatile"       # generación de PRD
-MODEL_UX           = "llama-3.3-70b-versatile"       # diseño de UX
-MODEL_ARCHITECT    = "gemini-2.5-flash"       # arquitectura y engineering plan (Gemini 2.5 Flash)
-MODEL_DEV          = "gemini-2.5-flash"       # generación de código (Gemini 2.5 Flash)
-MODEL_QA           = "llama-3.3-70b-versatile"       # testing y QA
-MODEL_INFRA        = "llama-3.3-70b-versatile"       # infraestructura
-MODEL_SECURITY     = "llama-3.3-70b-versatile"       # seguridad
 
 # ── Multi-Provider Support (Arch & Dev) ───────────────────────────────────────
 # Permite cambiar entre "gemini" y "openai" sin tocar código
@@ -42,6 +24,25 @@ LLM_MODEL_ARCH     = os.environ.get("LLM_MODEL_ARCH", "gemini-2.5-flash")  # o "
 LLM_PROVIDER_DEV   = os.environ.get("LLM_PROVIDER_DEV", "gemini")      # "gemini" o "openai"
 LLM_MODEL_DEV      = os.environ.get("LLM_MODEL_DEV", "gemini-2.5-flash")   # o "gpt-4o-mini", "gpt-4o"
 
+# MOCK_EARLY_AGENTS=true → PRD y UX usan archivos estáticos en lugar de LLM
+# Útil para probar solo DEV/QA/etc sin gastar tokens en fases tempranas
+MOCK_EARLY_AGENTS: bool = os.environ.get("MOCK_EARLY_AGENTS", "false").lower() == "true"
+
+GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"
+OPEN_AI_KEY: str = os.environ.get("OPEN_AI_KEY", "") if not TEST_MODE else "test"
+ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
+GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado, no usado actualmente
+
+# Modelos por agente — todos Groq (cambiar aquí, no en los nodos)
+MODEL_ORCHESTRATOR = "gpt-4o-mini"        # routing simple, modelo ligero
+MODEL_SPECKIT      = "gpt-4o-mini"    # plan maestro — requiere razonamiento complejo
+MODEL_PRD          = "gpt-4o-mini"
+MODEL_UX           = "gpt-4o-mini"
+MODEL_ARCHITECT    = "gpt-4o-mini"    # recibe PRD+UX acumulados — 8b se queda corto
+MODEL_DEV          = "gpt-4o-mini"    # recibe PRD+UX+ARCH — 128k context necesario
+MODEL_QA           = "gpt-4o-mini"    # recibe PRD+UX+ARCH+DEV
+MODEL_INFRA        = "gpt-4o-mini"
+MODEL_SECURITY     = "gpt-4o-mini"
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
 SLACK_BOT_TOKEN      = os.environ["SLACK_BOT_TOKEN"]
@@ -72,12 +73,18 @@ DASHBOARD_URL    = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
 
 
 # ── Checkpointing ──────────────────────────────────────────────────────────────
-CHECKPOINTER     = os.environ.get("CHECKPOINTER", "memory")
+CHECKPOINTER     = os.environ.get("CHECKPOINTER", "sqlite")
 SQLITE_PATH      = os.environ.get("SQLITE_PATH", "./mach_cycle.db")
 
 
 # ── GitHub ───────────────────────────────────────────────────────────────
 GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "")
-REPO_BE_NAME    = os.environ.get("REPO_BE_NAME", "mach-backend-test-hackathon")
 REPO_FE_NAME    = os.environ.get("REPO_FE_NAME", "mach-frontend-test-hackathon")
+
+
+# ── Confluence ──────────────────────────────────────────────────────────────────────────
+CONFLUENCE_URL       = os.environ.get("CONFLUENCE_URL", "")
+CONFLUENCE_EMAIL     = os.environ.get("CONFLUENCE_EMAIL", "")
+CONFLUENCE_API_TOKEN = os.environ.get("CONFLUENCE_API_TOKEN", "")
+CONFLUENCE_SPACE_KEY = os.environ.get("CONFLUENCE_SPACE_KEY", "MACH")

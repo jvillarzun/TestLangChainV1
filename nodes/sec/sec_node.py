@@ -1,5 +1,5 @@
 from state.cycle_state import CycleState
-from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke
+from nodes.helper import _get_last_feedback, load_prompt, save_output, llm_invoke, get_phase_instructions
 from tools.jira_tools import create_task
 from tools.slack_tools import notify_team
 from config.settings import MODEL_SECURITY
@@ -20,19 +20,21 @@ def run_security_node(state: CycleState) -> dict:
         arch_content=state.get("arch_content") or "",
         dev_content=state.get("dev_content") or "",
         feedback=feedback or "Sin feedback previo.",
+        orchestrator_instructions=get_phase_instructions(state, "sec") or "Sin instrucciones adicionales.",
     )
 
     try:
-        security_content = llm_invoke(
+        security_content, _usage = llm_invoke(
             model=MODEL_SECURITY,
             system_prompt=system_prompt,
             user_message="Genera el DEVSECOPS.md completo según las instrucciones.",
             stub_content="# DEVSECOPS.md stub — TEST_MODE activo",
         )
+        _usage["agent"] = "sec"
     except Exception as e:
         print(f"[SEC-AGENT] Error: {e}")
         notify_team(f"❌ SECURITY-AGENT falló en ciclo `{state['thread_id'][:8]}`: {e}", state["thread_id"])
-        return {"error_phase": "sec", "error_message": str(e), "security_content": None}
+        return {"error_phase": "sec", "error_message": str(e), "security_content": None, "token_usage": []}
 
     output_path = save_output("DEVSECOPS.md", security_content)
     print(f"   💾 Guardado en {output_path}")
@@ -44,11 +46,12 @@ def run_security_node(state: CycleState) -> dict:
         parent_key=state.get("jira_epic_key"),
     )
 
-    print(f"   ✅ DEVSECOPS.md generado ({len(security_content)} chars)")
+    print(f"   ✅ DEVSECOPS.md generado ({len(security_content)} chars) | tokens: {_usage['total_tokens']} | ${_usage['cost_usd']:.4f}")
 
     return {
         "security_content": security_content,
         "error_phase":      None,
         "error_message":    None,
         "jira_story_keys":  [task_key] if task_key else [],
+        "token_usage":      [_usage],
     }

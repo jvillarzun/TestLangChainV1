@@ -17,7 +17,7 @@ DELIVERABLES = [
     ("ux_content",       "🎨 UXSPECS.md",    "UXSPECS.md"),
     ("arch_content",     "🏗️ ARQSPECS.md",   "ARQSPECS.md"),
     ("dev_content",      "💻 DEVSPECS.md",   "DEVSPECS.md"),
-    ("qa_content",       "🧪 QASCPECS.md",   "QASCPECS.md"),
-    ("infra_content",    "⚙️ INFESPEOS.md",  "INFESPEOS.md"),
+    ("qa_content",       "🧪 QASPECS.md",   "QASPECS.md"),
+    ("infra_content",    "⚙️ INFESPECS.md",  "INFESPECS.md"),
     ("security_content", "🔐 DEVSECOPS.md",  "DEVSECOPS.md"),
 ]

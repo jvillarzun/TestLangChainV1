@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: mach-api
-    command: uvicorn api.slack_webhook:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn api.slack_webhook:app --host 0.0.0.0 --port 8000
     env_file:
       - .env
     environment:
@@ -19,8 +19,6 @@ services:
       - "8000:8000"
       - "3001:3001"  # Puerto para preview server de frontend
     volumes:
-      # Código fuente montado para hot-reload con uvicorn --reload
-      - .:/app:z
       # Base de datos SQLite compartida con el dashboard
       - mach-data:/app/data
       # Entregables generados por los agentes
@@ -29,6 +27,7 @@ services:
       - chroma-cache:/root/.cache/chroma
       # Repositorios clonados para build validation
       - mach-repos:/tmp/repos
+
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -36,6 +35,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ── Cloudflare Tunnel — expone el webhook a Slack ────────────────────────────
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mach-cloudflared
+    command: tunnel --url http://mach-api:8000
+    depends_on:
+      - mach-api
+    restart: unless-stopped
 
   # ── Vue.js Frontend (Race Control) ───────────────────────────────────────────
   mach-frontend:
@@ -49,7 +57,15 @@ services:
       - mach-api
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:80",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
