@@ -95,7 +95,8 @@ def generate_plan(body: PlanGenerate):
 
     try:
         raw, _ = llm_invoke(MODEL_SPECKIT, ORCHESTRATOR_SYSTEM_PROMPT, user_message, json.dumps(_stub))
-        plan = json.loads(raw)
+        cleaned = clean_json_block(raw)
+        plan = json.loads(cleaned)
     except (json.JSONDecodeError, Exception) as e:
         print(f"[Plan] Error generando plan: {e} — usando stub")
         plan = _stub
@@ -105,6 +106,22 @@ def generate_plan(body: PlanGenerate):
         "analysis":    plan.get("analysis", {}),
         "estimated_cycle_minutes": plan.get("estimated_cycle_minutes", 90),
     }
+    
+def clean_json_block(raw: str) -> str:
+      text = raw.strip()
+
+      if text.startswith("```"):
+          lines = text.splitlines()
+
+          if lines and lines[0].startswith("```"):
+              lines = lines[1:]
+
+          if lines and lines[-1].strip() == "```":
+              lines = lines[:-1]
+
+          text = "\n".join(lines).strip()
+
+      return text
 
 
 class CycleStart(BaseModel):

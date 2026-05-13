@@ -16,19 +16,20 @@ load_dotenv()
 TEST_MODE: bool = os.environ.get("TEST_MODE", "false").lower() == "true"
 
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "") if not TEST_MODE else "test"
+OPEN_AI_KEY: str = os.environ.get("OPEN_AI_KEY", "") if not TEST_MODE else "test"
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")  # reservado para P3 dev-agent
 GOOGLE_API_KEY:    str | None = os.environ.get("GOOGLE_API_KEY")     # reservado, no usado actualmente
 
 # Modelos por agente — todos Groq (cambiar aquí, no en los nodos)
-MODEL_ORCHESTRATOR = "llama-3.1-8b-instant"        # routing simple, modelo ligero
-MODEL_SPECKIT      = "llama-3.3-70b-versatile"    # plan maestro — requiere razonamiento complejo
-MODEL_PRD          = "llama-3.3-70b-versatile"
-MODEL_UX           = "llama-3.3-70b-versatile"
-MODEL_ARCHITECT    = "llama-3.3-70b-versatile"    # recibe PRD+UX acumulados — 8b se queda corto
-MODEL_DEV          = "llama-3.3-70b-versatile"    # recibe PRD+UX+ARCH — 128k context necesario
-MODEL_QA           = "llama-3.3-70b-versatile"    # recibe PRD+UX+ARCH+DEV
-MODEL_INFRA        = "llama-3.3-70b-versatile"
-MODEL_SECURITY     = "llama-3.3-70b-versatile"
+MODEL_ORCHESTRATOR = "gpt-4o-mini"        # routing simple, modelo ligero
+MODEL_SPECKIT      = "gpt-4o-mini"    # plan maestro — requiere razonamiento complejo
+MODEL_PRD          = "gpt-4o-mini"
+MODEL_UX           = "gpt-4o-mini"
+MODEL_ARCHITECT    = "gpt-4o-mini"    # recibe PRD+UX acumulados — 8b se queda corto
+MODEL_DEV          = "gpt-4o-mini"    # recibe PRD+UX+ARCH — 128k context necesario
+MODEL_QA           = "gpt-4o-mini"    # recibe PRD+UX+ARCH+DEV
+MODEL_INFRA        = "gpt-4o-mini"
+MODEL_SECURITY     = "gpt-4o-mini"
 
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
